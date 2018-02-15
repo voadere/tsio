@@ -1,0 +1,26 @@
+Installing the tsio package is very simple.
+
+    Download the zip or tbz file into a directory of your choice.
+
+    Extract the zip or tbz file.
+
+    If you have scons available just enter
+        scons
+
+    If you don't have scoms available, there i a little more work:
+       - compile the tsio,cpp file int an object filer.
+       - create a library containing this file
+       - If you want the test programming the compile the tsioTest.cpp file into
+         an executable, adding the library you just created.
+
+    Now you are all set to go.
+
+Using the tsio package in your programs.
+
+    Add '#include <tsio>' in your code where needed.
+
+    Add the directory where you downloaded tsio as an include directory.
+
+    Add the tsio library to the link command.
+
+

@@ -1,0 +1,94 @@
+tsio: type safe, printf compatible sprintf and fprintf functions, and an io manipulator
+      that allows setting ostream flags according to a format.
+
+
+- Features:
+
+  'tsio::sprintf' and 'tsio::fprintf are' fully compatible with
+  'std::sprintf' and 'std::fprintf, with the few exception:
+   - wide characters are not implemented.
+   - errors during formatting are printed on 'std::cerr'; no negative
+     value is ever returned.
+
+  'tsio::sprintf' takes a reference to a 'std::string' as it's first
+  parameter.  'tsio::fprintf' takes a reference to a 'std::osttream'
+
+  Exttra format specifer '%C' acts like '%c' but prints a '.' for
+  non-printable characters.
+
+  '%s' format is implemented for all types, and uses a default formatting.
+
+  Length modifiers are not required and thus ignored.
+
+  Allows 'std::string' as parameter for string formatting.
+
+  the 'tsio' functions have  approximately the same speed as 'std::sprintf'
+  (integer and string formatting is somewhat faster; floating point formatting
+  is somewhat slower).
+
+  A test program is provided that exhaustively checks the results of
+  'fmt::sprintf' amd 'std::sprintf' for equality.
+
+  'tsio::fstring' returns a formatted std::string;
+
+  The 'tsio::fmt' io manipulator sets stream flags Caccording to
+  a format.  It uses the same formats as sprintf, but the effects are
+  not always identical.  Some formats can not be reproduced exactly.
+  For example, the ' ' modifier (space if positive) is not available; neither is
+  integer format precision. ('% 10.3i' acts like '%10i').
+  The '%' is optional in 'std::fmt'.
+
+  'os << tsio::fmt()' can be used to reset all flags that are used in formatting
+  to their default values.
+
+  It is usualy save to specify 'using namespace tsio;', since the compiler can
+  disambiguate 'tsio::sprintf' and 'tsio::fprintf' from 'std::sprintf' and
+  'std::fprintf' by the type of the first parameter.  Other names in the
+  'tsio' namespace don't clash with 'std' names.
+  Of course, clashes with names in your application may preclude the use
+  of the 'using namespace tsio;' statement.
+
+
+- Example of sprintf:
+    using namespace tsio;
+
+    std::string str;
+    short s = 123;
+    int i = 42;
+    float f = float(234.567);
+    double d = 345.678;
+    const char* ch = "Don't panic";
+
+    short n1;
+    int n2;
+
+    sprintf(str, "%-15s,%n%12i,%d,%12.2f,%n%7.1E;%a", ch, &n1, s,
+            i, f, &n2, d, d);
+
+    std::cout <<  str << '\n';
+    std::cout << "n1 = " << n1 << '\n';
+    std::cout << "n2 = " << n2 << '\n';
+
+  results in:
+    Don't panic    ,         123,42,      234.57,3.5E+02;0x1.59ad916872b02p+8
+    n1 = 16
+    n2 = 45
+
+- Example of io manipulator:
+    // same variables as above
+    std::cout << fmt("%-15s") << ch << ',' << fmt("%12i") << s << ',' <<
+        fmt("d") << i << ',' << fmt("12.2f") << f << ',' <<
+        fmt("%7.1E") << d << ',' << fmt("a") << d << fmt() << '\n';
+
+  results in:
+    Don't panic    ,         123,42,      234.57,3.5E+02,0x1.59ad916872b02p+8
+
+- comparision of 'fmt' io manipulator and 'std' io manipulators:
+    std::cout << fmt("-12.2f") << f << '\n';
+
+  produces the same result as:
+    std::cout << std::setw(12) << std::setprecision(2) << std::left <<
+        std::fixed << f << '\n';
+
+  Which one would you rather write?
+
