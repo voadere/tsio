@@ -9,11 +9,12 @@ tsio: type safe, printf compatible sprintf and fprintf functions, and an io mani
    - wide characters are not implemented.
    - errors during formatting are printed on 'std::cerr'; no negative
      value is ever returned.
+   - positional parameters are not supported.
 
   'tsio::sprintf' takes a reference to a 'std::string' as it's first
-  parameter.  'tsio::fprintf' takes a reference to a 'std::osttream'
+  parameter.  'tsio::fprintf' takes a reference to a 'std::ostream'
 
-  Exttra format specifer '%C' acts like '%c' but prints a '.' for
+  Extra format specifer '%C' acts like '%c' but prints a '.' for
   non-printable characters.
 
   '%s' format is implemented for all types, and uses a default formatting.
@@ -31,7 +32,7 @@ tsio: type safe, printf compatible sprintf and fprintf functions, and an io mani
 
   'tsio::fstring' returns a formatted std::string;
 
-  The 'tsio::fmt' io manipulator sets stream flags Caccording to
+  The 'tsio::fmt' io manipulator sets stream flags according to
   a format.  It uses the same formats as sprintf, but the effects are
   not always identical.  Some formats can not be reproduced exactly.
   For example, the ' ' modifier (space if positive) is not available; neither is
