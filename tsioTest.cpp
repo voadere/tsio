@@ -108,7 +108,7 @@ void test(const T& value,
                 sprintf(text, format, value);
             }
 
-            std::cout << buf << std::endl;
+//          std::cout << buf << std::endl;
 
             expect(buf, text, value);
             count++;

@@ -485,3 +485,91 @@ std::ostream& tsio::fmt::operator()(std::ostream& out) const
 
     return out;
 }
+
+void tsioImplementation::printfDetail(std::string& dest, const FormatState& state, char format, const std::string& value)
+{
+    if (format == 's') {
+        outputString(dest,
+                value.c_str(),
+                value.size(),
+                state.specNum1,
+                state.specNum2Given ? state.specNum2 : std::numeric_limits<int>::max(),
+                state.type);
+    } else {
+        std::cerr << "Invalid format '" << format << "' for std::string value" << std::endl;
+    }
+}
+
+void tsioImplementation::printfDetail(std::string& dest, const FormatState& state, char format, const char* value)
+{
+    uintptr_t pValue = uintptr_t(value);
+
+    switch (format) {
+        case 'p':
+            outputNumber(dest, pValue, 16, state.specNum1, state.specNum2, state.type | alternative);
+
+            break;
+
+        case 's':
+            outputString(dest,
+                    value,
+                    state.specNum1,
+                    state.specNum2Given ? state.specNum2 : std::numeric_limits<int>::max(),
+                    state.type);
+
+            break;
+
+        default:
+            printfDetail(dest, state, format, static_cast<uintptr_t>(pValue));
+    }
+}
+
+void tsioImplementation::printfDetail(std::string& dest, const FormatState& state, char format, double value)
+{
+    switch (format) {
+        case 's':
+        case 'a':
+        case 'A':
+        case 'e':
+        case 'E':
+        case 'f':
+        case 'F':
+        case 'g':
+        case 'G': {
+            const char* f;
+
+            if (format == 's') {
+                FormatState newFlags(state);
+
+                newFlags.formatSpecifier = 'g';
+                f = newFlags.unParse();
+            } else {
+                f = state.unParse();
+            }
+
+            static char* pt = nullptr;
+            static size_t allocatedSize = 0;
+
+            int s = snprintf(pt, allocatedSize, f, value);
+
+            if (s < 0) {
+                return;
+            }
+
+            if (s >= int(allocatedSize)) {
+                allocatedSize = s * 2 + 1;
+                pt = static_cast<char*>(realloc(pt, allocatedSize));
+                sprintf(pt, f, value);
+            }
+
+            dest.append(pt, s);
+        }
+
+        break;
+
+        default:
+            std::cerr << "Invalid format '" << format << "' for floating point value" << std::endl;
+    }
+}
+
+

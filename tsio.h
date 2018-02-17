@@ -96,329 +96,158 @@ inline void outputString(std::string& dest, const char* text, int minSize, int m
     outputString(dest, text, strlen(text), minSize, maxSize, type);
 }
 
-template <size_t N>
-inline void outputString(std::string& dest, const char (&text)[N], int minSize, int maxSize, unsigned type)
-{
-    outputString(dest, text, N - 1, minSize, maxSize, type);
-}
-
-inline void outputString(std::string& dest, const std::string& text, int minSize, int maxSize, unsigned type)
-{
-    outputString(dest, text.c_str(), text.size(), minSize, maxSize, type);
-}
-
 void outputNumber(std::string& dest, long long pNumber, int base, int size, int precision, unsigned type);
 
-template <typename T, typename Enable = void>
-struct PrintfDetail
+void printfDetail(std::string& dest, const FormatState& state, char format, const std::string& value);
+void printfDetail(std::string& dest, const FormatState& state, char format, const char* value);
+void printfDetail(std::string& dest, const FormatState& state, char format, double value);
+
+template <typename T>
+inline void printfDetail(std::string& dest, const FormatState& state, char format, const T& value)
 {
-    void operator()(std::string& dest, const FormatState& state, char format, const T& value)
-    {
-        if (format == 's') {
+    static char niceChar[256] = {0};
+    char charBuf[2];
+    typename std::make_signed<T>::type sValue = value;
+    typename std::make_unsigned<T>::type uValue = value;
+
+    auto type = state.type;
+
+    if ((type & zerofill) && state.specNum2Given) {
+        type &= ~zerofill;
+    }
+
+    switch (format) {
+        case 'b':
+            outputNumber(dest, uValue, 2, state.specNum1, state.specNum2, type);
+            break;
+
+        case 'c':
+            *charBuf = char(value);
+            charBuf[1] = 0;
             outputString(dest,
-                         value,
-                         state.specNum1,
-                         state.specNum2Given ? state.specNum2 : std::numeric_limits<int>::max(),
-                         state.type);
-        } else {
-            std::cerr << "Invalid format '" << format << "' for std::string value" << std::endl;
-        }
-    }
-};
-
-template <typename T>
-struct PrintfDetail<T, typename std::enable_if<std::is_integral<T>::value>::type>
-{
-    void operator()(std::string& dest, const FormatState& state, char format, const T& value)
-    {
-        static char niceChar[256] = {0};
-        char charBuf[2];
-        typename std::make_signed<T>::type sValue = value;
-        typename std::make_unsigned<T>::type uValue = value;
-
-        auto type = state.type;
-
-        if ((type & zerofill) && state.specNum2Given) {
-            type &= ~zerofill;
-        }
-
-        switch (format) {
-            case 'b':
-                outputNumber(dest, uValue, 2, state.specNum1, state.specNum2, type);
-                break;
-
-            case 'c':
-                *charBuf = char(value);
-                charBuf[1] = 0;
-                outputString(dest,
-                             charBuf,
-                             state.specNum1,
-                             state.specNum2Given ? (state.specNum2 > 0 ? state.specNum2 : 1)
-                                                 : std::numeric_limits<int>::max(),
-                             type);
-
-                break;
-
-            case 'C':
-                if (*niceChar == 0) {
-                    memset(niceChar, '.', sizeof niceChar);
-
-                    for (int cnt = ' '; cnt <= '~'; ++cnt) {
-                        niceChar[cnt] = char(cnt);
-                    }
-                }
-
-                *charBuf = niceChar[value & 0xff];
-                charBuf[1] = 0;
-                outputString(dest, charBuf, state.specNum1, state.specNum2, type);
-
-                break;
-
-            case 'd':
-            case 'i':
-            case 's':
-                outputNumber(dest,
-                             sValue,
-                             10,
-                             state.specNum1,
-                             state.specNum2Given ? state.specNum2 : 1,
-                             type | signedNumber);
-                break;
-
-            case 'o':
-                outputNumber(dest, uValue, 8, state.specNum1, state.specNum2Given ? state.specNum2 : 1, type);
-
-                break;
-
-            case 'u':
-                outputNumber(
-                        dest, uValue, 10, state.specNum1, state.specNum2Given ? state.specNum2 : 1, type);
-
-                break;
-
-            case 'x':
-                outputNumber(
-                        dest, uValue, 16, state.specNum1, state.specNum2Given ? state.specNum2 : 1, type);
-
-                break;
-
-            case 'X':
-                outputNumber(dest,
-                             uValue,
-                             16,
-                             state.specNum1,
-                             state.specNum2Given ? state.specNum2 : 1,
-                             type | upcase);
-
-                break;
-
-            case 'n':
-                std::cerr << "Did you forget to specify the parameter for '%n' by pointer?" << std::endl;
-
-            default:
-                std::cerr << "Invalid format '" << format << "' for integeral value" << std::endl;
-        }
-    }
-};
-
-#if 0
-template<typename T>
-struct PrintfDetail<T,typename std::enable_if<std::is_pointer<T>::value>::type>
-{
-    void operator()(std::string& dest, const FormatState& state, char format, const T& value)
-    {
-        uintptr_t pValue = uintptr_t(value);
-
-        switch(format) {
-            case 'p':
-                outputNumber(dest, pValue, 16,
-                        state.specNum1,
-                        state.specNum2, state.type | alternative);
-
-                break;
-
-            case 's':
-                outputString(dest, value, state.specNum1,
-                        state.specNum2Given ? state.specNum2 : std::numeric_limits<int>::max(),
-                        state.type);
-
-                break;
-
-            default:
-                {
-                    PrintfDetail<uintptr_t> printfDetail;
-                    printfDetail(dest, state, format, pValue); 
-                }
-        }
-    }
-};
-
-#else
-template <typename T>
-struct is_char : std::integral_constant<bool, std::is_same<typename std::remove_cv<T>::type, char>::value>
-{
-};
-
-template <typename T>
-struct is_non_char : std::integral_constant<bool, std::is_integral<T>::value && !is_char<T>::value>
-{
-};
-
-template <typename T>
-struct PrintfDetail<T,
-                    typename std::enable_if<std::is_pointer<T>::value &&
-                                            is_char<typename std::remove_pointer<T>::type>::value>::type>
-{
-    void operator()(std::string& dest, const FormatState& state, char format, const T& value)
-    {
-        uintptr_t pValue = uintptr_t(value);
-
-        switch (format) {
-            case 'p':
-                outputNumber(dest, pValue, 16, state.specNum1, state.specNum2, state.type | alternative);
-
-                break;
-
-            case 's':
-                outputString(dest,
-                             value,
-                             state.specNum1,
-                             state.specNum2Given ? state.specNum2 : std::numeric_limits<int>::max(),
-                             state.type);
-
-                break;
-
-            default: {
-                PrintfDetail<uintptr_t> faddDetail;
-                faddDetail(dest, state, format, pValue);
-            }
-        }
-    }
-};
-
-template <typename T>
-struct PrintfDetail<T,
-                    typename std::enable_if<std::is_pointer<T>::value &&
-                                            is_non_char<typename std::remove_pointer<T>::type>::value &&
-                                            !std::is_const<typename std::remove_pointer<T>::type>::value>::type>
-{
-    void operator()(std::string& dest, const FormatState& state, char format, const T& value)
-    {
-        uintptr_t pValue = uintptr_t(value);
-
-        switch (format) {
-            case 'p':
-                outputNumber(dest, pValue, 16, state.specNum1, state.specNum2, state.type | alternative);
-
-                break;
-
-            case 'n':
-                using baseType = typename std::remove_pointer<T>::type;
-
-                *value = baseType(dest.size());
-
-                break;
-
-            default: {
-                PrintfDetail<uintptr_t> faddDetail;
-                faddDetail(dest, state, format, pValue);
-            }
-        }
-    }
-};
-
-template <typename T>
-struct PrintfDetail<T,
-                    typename std::enable_if<std::is_pointer<T>::value &&
-                                            is_non_char<typename std::remove_pointer<T>::type>::value &&
-                                            std::is_const<typename std::remove_pointer<T>::type>::value>::type>
-{
-    void operator()(std::string& dest, const FormatState& state, char format, const T& value)
-    {
-        uintptr_t pValue = uintptr_t(value);
-
-        switch (format) {
-            case 'p':
-                outputNumber(dest, pValue, 16, state.specNum1, state.specNum2, state.type | alternative);
-
-                break;
-
-            default: {
-                PrintfDetail<uintptr_t> faddDetail;
-                faddDetail(dest, state, format, pValue);
-            }
-        }
-    }
-};
-
-#endif
-
-template <typename T>
-struct PrintfDetail<T, typename std::enable_if<std::is_floating_point<T>::value>::type>
-{
-    void operator()(std::string& dest, const FormatState& state, char format, const T& value)
-    {
-        switch (format) {
-            case 's':
-            case 'a':
-            case 'A':
-            case 'e':
-            case 'E':
-            case 'f':
-            case 'F':
-            case 'g':
-            case 'G': {
-                const char* f;
-
-                if (format == 's') {
-                    FormatState newFlags(state);
-
-                    newFlags.formatSpecifier = 'g';
-                    f = newFlags.unParse();
-                } else {
-                    f = state.unParse();
-                }
-
-                static char* pt = nullptr;
-                static size_t allocatedSize = 0;
-
-                int s = snprintf(pt, allocatedSize, f, value);
-
-                if (s < 0) {
-                    return;
-                }
-
-                if (s >= int(allocatedSize)) {
-                    allocatedSize = s * 2 + 1;
-                    pt = static_cast<char*>(realloc(pt, allocatedSize));
-                    sprintf(pt, f, value);
-                }
-
-                dest.append(pt, s);
-            }
+                    charBuf,
+                    state.specNum1,
+                    state.specNum2Given ? (state.specNum2 > 0 ? state.specNum2 : 1)
+                    : std::numeric_limits<int>::max(),
+                    type);
 
             break;
 
-            default:
-                std::cerr << "Invalid format '" << format << "' for floating point value" << std::endl;
-        }
-    }
-};
+        case 'C':
+            if (*niceChar == 0) {
+                memset(niceChar, '.', sizeof niceChar);
 
-template <>
-struct PrintfDetail<bool, void>
+                for (int cnt = ' '; cnt <= '~'; ++cnt) {
+                    niceChar[cnt] = char(cnt);
+                }
+            }
+
+            *charBuf = niceChar[value & 0xff];
+            charBuf[1] = 0;
+            outputString(dest, charBuf, state.specNum1, state.specNum2, type);
+
+            break;
+
+        case 'd':
+        case 'i':
+        case 's':
+            outputNumber(dest,
+                    sValue,
+                    10,
+                    state.specNum1,
+                    state.specNum2Given ? state.specNum2 : 1,
+                    type | signedNumber);
+            break;
+
+        case 'o':
+            outputNumber(dest, uValue, 8, state.specNum1, state.specNum2Given ? state.specNum2 : 1, type);
+
+            break;
+
+        case 'u':
+            outputNumber(
+                    dest, uValue, 10, state.specNum1, state.specNum2Given ? state.specNum2 : 1, type);
+
+            break;
+
+        case 'x':
+            outputNumber(
+                    dest, uValue, 16, state.specNum1, state.specNum2Given ? state.specNum2 : 1, type);
+
+            break;
+
+        case 'X':
+            outputNumber(dest,
+                    uValue,
+                    16,
+                    state.specNum1,
+                    state.specNum2Given ? state.specNum2 : 1,
+                    type | upcase);
+
+            break;
+
+        case 'n':
+            std::cerr << "Did you forget to specify the parameter for '%n' by pointer?" << std::endl;
+
+        default:
+            std::cerr << "Invalid format '" << format << "' for integeral value" << std::endl;
+    }
+}
+
+template <typename T>
+inline void printfDetail(std::string& dest, const FormatState& state, char format, T* value)
 {
-    void operator()(std::string& dest, const FormatState& state, char format, const bool& value)
-    {
-        if (format == 's') {
-            const char* pt = value ? "true" : "false";
+    uintptr_t pValue = uintptr_t(value);
 
-            PrintfDetail<const char*>()(dest, state, format, pt);
-        } else {
-            PrintfDetail<int>()(dest, state, format, value);
-        }
+    switch (format) {
+        case 'p':
+            outputNumber(dest, pValue, 16, state.specNum1, state.specNum2, state.type | alternative);
+
+            break;
+
+        case 'n':
+            using baseType = typename std::remove_pointer<T>::type;
+
+            *value = baseType(dest.size());
+
+            break;
+
+        default:
+            printfDetail(dest, state, format, static_cast<uintptr_t>(pValue));
     }
-};
+}
+
+template <typename T>
+inline void printfDetail(std::string& dest, const FormatState& state, char format, const T* value)
+{
+    uintptr_t pValue = uintptr_t(value);
+
+    switch (format) {
+        case 'p':
+            outputNumber(dest, pValue, 16, state.specNum1, state.specNum2, state.type | alternative);
+
+            break;
+
+        default:
+            printfDetail(dest, state, format, static_cast<uintptr_t>(pValue));
+    }
+}
+
+inline void printfDetail(std::string& dest, const FormatState& state, char format, float value)
+{
+    printfDetail(dest, state, format, double(value));
+}
+
+inline void printfDetail(std::string& dest, const FormatState& state, char format, bool value)
+{
+    if (format == 's') {
+        const char* pt = value ? "true" : "false";
+
+        printfDetail(dest, state, format, pt);
+    } else {
+        printfDetail(dest, state, format, static_cast<long long>(value));
+    }
+}
 
 template <typename T, typename enable = void>
 struct ToSpec
@@ -496,8 +325,6 @@ void printfOne(std::string& dest, const char*& format, FormatState& state, const
             }
         }
     }
-
-    PrintfDetail<T> printfDetail;
 
     printfDetail(dest, state, state.formatSpecifier, value);
     state.reset();
