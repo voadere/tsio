@@ -246,58 +246,101 @@ void tsioImplementation::FormatState::parse(const char*& format)
 {
     unsigned char ch = *(format++);
 
-    for (;;) {
-        if (ch == '0') {
-            type |= zerofill;
-        } else if (ch == '-') {
-            type |= leftJustify;
-        } else if (ch == '+') {
-            type |= plusIfPositive;
-        } else if (ch == ' ') {
-            type |= spaceIfPositive;
-        } else if (ch == '#') {
-            type |= alternative;
-        } else {
-            break;
+    if (ch >= '1' && ch <= '9') {
+        unsigned number = ch - '0';
+
+        auto pt = format;
+
+        for (; *pt >= '0' && *pt <= '9'; ++pt) {
+            number = number * 10 + (*pt - '0');
         }
 
-        ch = *(format++);
+        if (*pt == '$') {
+            position = number;
+            format = pt + 1;
+            ch = *(format++);
+        } else {
+            width = number;
+            widthGiven = true;
+            format = pt;
+            ch = *(format++);
+        }
     }
 
-    if (ch == '*') {
-        specNum1Dynamic = true;
-        specNum1Given = true;
-        active = true;
-        ch = *(format++);
-    } else {
-        if (unsigned(ch - '0') < 9) {
-            specNum1Given = true;
-            specNum1 = unsigned(ch - '0');
+    if (!widthGiven) {
+        for (;;) {
+            if (ch == '0') {
+                type |= zerofill;
+            } else if (ch == '-') {
+                type |= leftJustify;
+            } else if (ch == '+') {
+                type |= plusIfPositive;
+            } else if (ch == ' ') {
+                type |= spaceIfPositive;
+            } else if (ch == '#') {
+                type |= alternative;
+            } else {
+                break;
+            }
+
+            ch = *(format++);
+        }
+
+        if (ch == '*') {
+            widthDynamic = true;
+            widthGiven = true;
+            active = true;
             ch = *(format++);
 
-            while (unsigned(ch - '0') < 9) {
-                specNum1 = specNum1 * 10 + (unsigned(ch - '0'));
+            if (unsigned(ch - '0') < 9) {
+                widthPosition = unsigned(ch - '0');
                 ch = *(format++);
+
+                while (unsigned(ch - '0') < 9) {
+                    widthPosition = widthPosition * 10 + (unsigned(ch - '0'));
+                    ch = *(format++);
+                }
+            }
+        } else {
+            if (unsigned(ch - '0') < 9) {
+                widthGiven = true;
+                width = unsigned(ch - '0');
+                ch = *(format++);
+
+                while (unsigned(ch - '0') < 9) {
+                    width = width * 10 + (unsigned(ch - '0'));
+                    ch = *(format++);
+                }
             }
         }
     }
 
     if (ch == '.') {
         ch = *(format++);
-        specNum2Given = true;
+        precisionGiven = true;
 
         if (ch == '*') {
-            specNum2Dynamic = true;
+            precisionDynamic = true;
             active = true;
             ch = *(format++);
+
+            if (unsigned(ch - '0') < 9) {
+                precisionPosition = unsigned(ch - '0');
+                ch = *(format++);
+
+                while (unsigned(ch - '0') < 9) {
+                    precisionPosition = precisionPosition * 10 + (unsigned(ch - '0'));
+                    ch = *(format++);
+                }
+            }
         }
         if (unsigned(ch - '0') < 9) {
-            specNum2 = unsigned(ch - '0');
+            precision = unsigned(ch - '0');
 
             ch = *(format++);
 
             while (unsigned(ch - '0') < 9) {
-                specNum2 = specNum2 * 10 + (unsigned(ch - '0'));
+                precision = precision * 10 + (unsigned(ch - '0'));
                 ch = *(format++);
             }
         }
@@ -325,8 +368,8 @@ const char* tsioImplementation::FormatState::unParse() const
 
     *(--pt) = formatSpecifier;
 
-    if (specNum2Given) {
-        unsigned tmp = specNum2;
+    if (precisionGiven) {
+        unsigned tmp = precision;
 
         do {
             unsigned q = tmp / 10;
@@ -339,8 +382,8 @@ const char* tsioImplementation::FormatState::unParse() const
         *(--pt) = '.';
     }
 
-    if (specNum1Given) {
-        unsigned tmp = specNum1;
+    if (widthGiven) {
+        unsigned tmp = width;
 
         do {
             unsigned q = tmp / 10;
@@ -424,12 +467,12 @@ std::ostream& tsio::fmt::operator()(std::ostream& out) const
     }
 
     // spaceIfPositive can not be implemented on streams
-    if (state.specNum1Given) {
-        out.width(state.specNum1);
+    if (state.widthGiven) {
+        out.width(state.width);
     }
 
-    if (state.specNum2Given) {
-        out.precision(state.specNum2);
+    if (state.precisionGiven) {
+        out.precision(state.precision);
     }
 
     switch (state.formatSpecifier) {
@@ -486,46 +529,51 @@ std::ostream& tsio::fmt::operator()(std::ostream& out) const
     return out;
 }
 
-void tsioImplementation::printfDetail(std::string& dest, const FormatState& state, char format, const std::string& value)
+void tsioImplementation::printfDetail(std::string& dest, const FormatState& state, const std::string& value)
 {
+    char format = state.formatSpecifier;
+
     if (format == 's') {
         outputString(dest,
                 value.c_str(),
                 value.size(),
-                state.specNum1,
-                state.specNum2Given ? state.specNum2 : std::numeric_limits<int>::max(),
+                state.width,
+                state.precisionGiven ? state.precision : std::numeric_limits<int>::max(),
                 state.type);
     } else {
         std::cerr << "Invalid format '" << format << "' for std::string value" << std::endl;
     }
 }
 
-void tsioImplementation::printfDetail(std::string& dest, const FormatState& state, char format, const char* value)
+void tsioImplementation::printfDetail(std::string& dest, const FormatState& state, const char* value)
 {
+    char format = state.formatSpecifier;
     uintptr_t pValue = uintptr_t(value);
 
     switch (format) {
         case 'p':
-            outputNumber(dest, pValue, 16, state.specNum1, state.specNum2, state.type | alternative);
+            outputNumber(dest, pValue, 16, state.width, state.precision, state.type | alternative);
 
             break;
 
         case 's':
             outputString(dest,
                     value,
-                    state.specNum1,
-                    state.specNum2Given ? state.specNum2 : std::numeric_limits<int>::max(),
+                    state.width,
+                    state.precisionGiven ? state.precision : std::numeric_limits<int>::max(),
                     state.type);
 
             break;
 
         default:
-            printfDetail(dest, state, format, static_cast<uintptr_t>(pValue));
+            printfDetail(dest, state, static_cast<uintptr_t>(pValue));
     }
 }
 
-void tsioImplementation::printfDetail(std::string& dest, const FormatState& state, char format, double value)
+void tsioImplementation::printfDetail(std::string& dest, const FormatState& state, double value)
 {
+    char format = state.formatSpecifier;
+
     switch (format) {
         case 's':
         case 'a':

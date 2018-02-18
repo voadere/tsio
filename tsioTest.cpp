@@ -116,7 +116,7 @@ void test(const T& value,
     }
 }
 
-void testStringIntegral()
+static void testStringIntegral()
 {
     int intValues[] = {1234, -1234, 1, -1, 0, int(0x80000000)};
     int spec1s[] = {-1, 3, 15, 0};
@@ -136,7 +136,7 @@ void testStringIntegral()
     }
 }
 
-void testStringFloatingPoint()
+static void testStringFloatingPoint()
 {
     double floatValues[] = {12.34, 987.0, 56e35, 0., 456.78, -456.78};
     int spec1s[] = {15, 0, -1};
@@ -151,7 +151,7 @@ void testStringFloatingPoint()
     }
 }
 
-void testStringPointer()
+static void testStringPointer()
 {
     const char* t1 = "Another test";
 
@@ -166,12 +166,12 @@ void testStringPointer()
     }
 }
 
-void testStringDynamics()
+static void testStringDynamics()
 {
     int intValues[] = {1234, -1234, 1, -1, 0, int(0x80000000)};
     double floatValues[] = {1234.56, -1234.56, -1., 0.};
     int spec1s[] = {15, -15, 0};
-    int spec2s[] = {3, 10, 0};
+    int spec2s[] = {3, 10, -1, 0};
 
     for (auto spec1 : spec1s) {
         for (auto spec2 : spec2s) {
@@ -190,7 +190,7 @@ void testStringDynamics()
     }
 }
 
-void testPrintfN()
+static void testPrintfN()
 {
     std::string text;
     int iSize;
@@ -213,13 +213,21 @@ void testPrintfN()
     expect(11, sSize, "");
 }
 
-void testPrintString()
+static void testPrintString()
 {
     std::string text;
     std::string s = "abcde";
 
     sprintf(text, "%s", s);
     expect("abcde", text, "");
+}
+
+static void testPositional()
+{
+    std::string text;
+
+    sprintf(text, "%2$s, %1$s!", "world", "Hello");
+    expect("Hello, world!", text, "");
 }
 
 static void run()
@@ -230,6 +238,7 @@ static void run()
     testStringDynamics();
     testPrintfN();
     testPrintString();
+    testPositional();
 }
 
 static void test()
@@ -251,7 +260,7 @@ static void examples()
     short n1;
     int n2;
 
-    sprintf(str, "%-15s,%n%12i,%d,%12.2f,%n%7.1E;%a", ch, &n1, s, i, f, &n2, d, d);
+    sprintf(str, "%-15s,%2$n%12i,%d,%12.2f,%n%7.1E;%a", ch, &n1, s, i, f, &n2, d, d);
 
     std::cout << str << '\n';
     std::cout << "n1 = " << n1 << '\n';
@@ -283,7 +292,7 @@ int main(int argc, char* argv[])
         run();
     }
 
-    examples();
+//  examples();
 
     fprintf(std::cout,
             "    %d sprintf tests executed in %4.2f seconds\n",

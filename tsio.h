@@ -53,13 +53,16 @@ enum {
 
 struct FormatState
 {
-    int specNum1 = 0;
-    int specNum2 = 0;
+    unsigned width = 0;
+    unsigned precision = 0;
     unsigned type = 0;
-    bool specNum1Dynamic = false;
-    bool specNum2Dynamic = false;
-    bool specNum1Given = false;
-    bool specNum2Given = false;
+    unsigned position = 0;
+    unsigned widthPosition = 0;
+    unsigned precisionPosition = 0;
+    bool widthDynamic = false;
+    bool precisionDynamic = false;
+    bool widthGiven = false;
+    bool precisionGiven = false;
     bool active = false;
     char formatSpecifier = 0;
 
@@ -77,13 +80,16 @@ struct FormatState
 
     void reset()
     {
-        specNum1 = 0;
-        specNum2 = 0;
+        width = 0;
+        precision = 0;
         type = 0;
-        specNum1Given = false;
-        specNum2Given = false;
-        specNum1Dynamic = false;
-        specNum2Dynamic = false;
+        position = 0;
+        widthPosition = 0;
+        precisionPosition = 0;
+        widthGiven = false;
+        precisionGiven = false;
+        widthDynamic = false;
+        precisionDynamic = false;
         active = false;
         formatSpecifier = 0;
     }
@@ -98,27 +104,28 @@ inline void outputString(std::string& dest, const char* text, int minSize, int m
 
 void outputNumber(std::string& dest, long long pNumber, int base, int size, int precision, unsigned type);
 
-void printfDetail(std::string& dest, const FormatState& state, char format, const std::string& value);
-void printfDetail(std::string& dest, const FormatState& state, char format, const char* value);
-void printfDetail(std::string& dest, const FormatState& state, char format, double value);
+void printfDetail(std::string& dest, const FormatState& state, const std::string& value);
+void printfDetail(std::string& dest, const FormatState& state, const char* value);
+void printfDetail(std::string& dest, const FormatState& state, double value);
 
 template <typename T>
-inline void printfDetail(std::string& dest, const FormatState& state, char format, const T& value)
+inline void printfDetail(std::string& dest, const FormatState& state, const T& value)
 {
     static char niceChar[256] = {0};
     char charBuf[2];
     typename std::make_signed<T>::type sValue = value;
     typename std::make_unsigned<T>::type uValue = value;
+    char format = state.formatSpecifier;
 
     auto type = state.type;
 
-    if ((type & zerofill) && state.specNum2Given) {
+    if ((type & zerofill) && state.precisionGiven) {
         type &= ~zerofill;
     }
 
     switch (format) {
         case 'b':
-            outputNumber(dest, uValue, 2, state.specNum1, state.specNum2, type);
+            outputNumber(dest, uValue, 2, state.width, state.precision, type);
             break;
 
         case 'c':
@@ -126,8 +133,8 @@ inline void printfDetail(std::string& dest, const FormatState& state, char forma
             charBuf[1] = 0;
             outputString(dest,
                     charBuf,
-                    state.specNum1,
-                    state.specNum2Given ? (state.specNum2 > 0 ? state.specNum2 : 1)
+                    state.width,
+                    state.precisionGiven ? (state.precision > 0 ? state.precision : 1)
                     : std::numeric_limits<int>::max(),
                     type);
 
@@ -144,7 +151,7 @@ inline void printfDetail(std::string& dest, const FormatState& state, char forma
 
             *charBuf = niceChar[value & 0xff];
             charBuf[1] = 0;
-            outputString(dest, charBuf, state.specNum1, state.specNum2, type);
+            outputString(dest, charBuf, state.width, state.precision, type);
 
             break;
 
@@ -154,25 +161,25 @@ inline void printfDetail(std::string& dest, const FormatState& state, char forma
             outputNumber(dest,
                     sValue,
                     10,
-                    state.specNum1,
-                    state.specNum2Given ? state.specNum2 : 1,
+                    state.width,
+                    state.precisionGiven ? state.precision : 1,
                     type | signedNumber);
             break;
 
         case 'o':
-            outputNumber(dest, uValue, 8, state.specNum1, state.specNum2Given ? state.specNum2 : 1, type);
+            outputNumber(dest, uValue, 8, state.width, state.precisionGiven ? state.precision : 1, type);
 
             break;
 
         case 'u':
             outputNumber(
-                    dest, uValue, 10, state.specNum1, state.specNum2Given ? state.specNum2 : 1, type);
+                    dest, uValue, 10, state.width, state.precisionGiven ? state.precision : 1, type);
 
             break;
 
         case 'x':
             outputNumber(
-                    dest, uValue, 16, state.specNum1, state.specNum2Given ? state.specNum2 : 1, type);
+                    dest, uValue, 16, state.width, state.precisionGiven ? state.precision : 1, type);
 
             break;
 
@@ -180,8 +187,8 @@ inline void printfDetail(std::string& dest, const FormatState& state, char forma
             outputNumber(dest,
                     uValue,
                     16,
-                    state.specNum1,
-                    state.specNum2Given ? state.specNum2 : 1,
+                    state.width,
+                    state.precisionGiven ? state.precision : 1,
                     type | upcase);
 
             break;
@@ -195,13 +202,14 @@ inline void printfDetail(std::string& dest, const FormatState& state, char forma
 }
 
 template <typename T>
-inline void printfDetail(std::string& dest, const FormatState& state, char format, T* value)
+inline void printfDetail(std::string& dest, const FormatState& state, T* value)
 {
+    char format = state.formatSpecifier;
     uintptr_t pValue = uintptr_t(value);
 
     switch (format) {
         case 'p':
-            outputNumber(dest, pValue, 16, state.specNum1, state.specNum2, state.type | alternative);
+            outputNumber(dest, pValue, 16, state.width, state.precision, state.type | alternative);
 
             break;
 
@@ -213,39 +221,42 @@ inline void printfDetail(std::string& dest, const FormatState& state, char forma
             break;
 
         default:
-            printfDetail(dest, state, format, static_cast<uintptr_t>(pValue));
+            printfDetail(dest, state, static_cast<uintptr_t>(pValue));
     }
 }
 
 template <typename T>
-inline void printfDetail(std::string& dest, const FormatState& state, char format, const T* value)
+inline void printfDetail(std::string& dest, const FormatState& state, const T* value)
 {
+    char format = state.formatSpecifier;
     uintptr_t pValue = uintptr_t(value);
 
     switch (format) {
         case 'p':
-            outputNumber(dest, pValue, 16, state.specNum1, state.specNum2, state.type | alternative);
+            outputNumber(dest, pValue, 16, state.width, state.precision, state.type | alternative);
 
             break;
 
         default:
-            printfDetail(dest, state, format, static_cast<uintptr_t>(pValue));
+            printfDetail(dest, state, static_cast<uintptr_t>(pValue));
     }
 }
 
-inline void printfDetail(std::string& dest, const FormatState& state, char format, float value)
+inline void printfDetail(std::string& dest, const FormatState& state, float value)
 {
-    printfDetail(dest, state, format, double(value));
+    printfDetail(dest, state, double(value));
 }
 
-inline void printfDetail(std::string& dest, const FormatState& state, char format, bool value)
+inline void printfDetail(std::string& dest, const FormatState& state, bool value)
 {
+    char format = state.formatSpecifier;
+
     if (format == 's') {
         const char* pt = value ? "true" : "false";
 
-        printfDetail(dest, state, format, pt);
+        printfDetail(dest, state, pt);
     } else {
-        printfDetail(dest, state, format, static_cast<long long>(value));
+        printfDetail(dest, state, static_cast<long long>(value));
     }
 }
 
@@ -268,37 +279,51 @@ struct ToSpec<T, typename std::enable_if<std::is_integral<T>::value>::type>
     }
 };
 
+inline void skipToFormat(std::string& dest, const char*& format)
+{
+    const char* pt0 = format;
+
+    while (*format != 0) {
+        if (*format == '%') {
+            if (format != pt0) {
+                dest.append(pt0, format - pt0);
+            }
+
+            format++;
+            pt0 = format;
+
+            if (*format != '%') {
+                return;
+            }
+        }
+
+        format++;
+    }
+
+    if (format != pt0) {
+        dest.append(pt0, format - pt0);
+    }
+}
+
 template <typename T>
 void printfOne(std::string& dest, const char*& format, FormatState& state, const T& value)
 {
     ToSpec<T> toSpec;
 
     if (state.active) {
-        if (state.specNum2Dynamic) {
-            state.specNum2 = toSpec(value);
-            state.specNum2Dynamic = false;
+        if (state.precisionDynamic) {
+            int spec = toSpec(value);
+
+            if (spec < 0) {
+                state.precisionGiven = false;
+            } else {
+                state.precision = spec;
+            }
+
+            state.precisionDynamic = false;
             return;
         }
     } else {
-        const char* pt0 = format;
-
-        while (*format != 0) {
-            if (*format == '%') {
-                if (format != pt0) {
-                    dest.append(pt0, format - pt0);
-                }
-
-                format++;
-                pt0 = format;
-
-                if (*format != '%') {
-                    break;
-                }
-            }
-
-            format++;
-        }
-
         if (*format == 0) {
             std::cerr << "Extraneous parameter or missing format specifier." << std::endl;
             return;
@@ -306,28 +331,98 @@ void printfOne(std::string& dest, const char*& format, FormatState& state, const
 
         state.parse(format);
 
+        if (state.position != 0) {
+            std::cerr << "Positional arguments can not be mixed with sequential arguments." << std::endl;
+            return;
+        }
+
         if (state.active) {
-            if (state.specNum1Dynamic) {
-                state.specNum1 = toSpec(value);
-                if (state.specNum1 < 0) {
-                    state.specNum1 = -state.specNum1;
+            if (state.widthDynamic) {
+                int spec = toSpec(value);
+
+                if (spec < 0) {
+                    state.width = -spec;
                     state.type |= leftJustify;
+                } else {
+                    state.width = spec;
                 }
 
-                state.specNum1Dynamic = false;
+                state.widthDynamic = false;
                 return;
             }
 
-            if (state.specNum2Dynamic) {
-                state.specNum2 = toSpec(value);
-                state.specNum2Dynamic = false;
+            if (state.precisionDynamic) {
+                int spec = toSpec(value);
+
+                if (spec < 0) {
+                    state.precisionGiven = false;
+                } else {
+                    state.precision = spec;
+                }
+
+                state.precisionDynamic = false;
                 return;
             }
         }
     }
 
-    printfDetail(dest, state, state.formatSpecifier, value);
+    printfDetail(dest, state, value);
     state.reset();
+    skipToFormat(dest, format);
+}
+
+#if __cplusplus < 201703L
+inline void printfNth(std::string&, FormatState&, size_t)
+{
+    std::cerr << "Invalid position in format." << std::endl;
+}
+
+template <typename T, typename... Ts>
+void printfNth(std::string& dest, FormatState& state, size_t index, const T& t, const Ts&... ts)
+{
+    if (index == 1) {
+        printfDetail(dest, state, t);
+    } else {
+        printfNth(dest, state, index - 1, ts...);
+    }
+}
+#else
+template <typename T, typename... Ts>
+bool printfNth(std::string& dest, FormatState& state, size_t index, const T& t, const Ts&... ts)
+{
+    if (index == 1) {
+        printfDetail(dest, state, t);
+        return true;
+    } else {
+        return false;
+    }
+}
+#endif
+
+template <typename... Ts>
+void printfPositional(std::string& dest, const char*& format, FormatState& state, const Ts&... ts)
+{
+    if (*format == 0) {
+        std::cerr << "Extraneous parameter or missing format specifier." << std::endl;
+        return;
+    }
+
+    state.parse(format);
+
+    if (state.position == 0) {
+        std::cerr << "Positional arguments can not be mixed with sequential arguments." << std::endl;
+        return;
+    }
+
+#if __cplusplus < 201703L
+    printfNth(dest, state, state.position, ts...);
+#else
+    auto index = state.position + 1;
+
+    static_cast<void>(((index--, printfNth(dest, state, index, ts)) || ...));
+#endif
+    state.reset();
+    skipToFormat(dest, format);
 }
 
 #if __cplusplus < 201703L
@@ -349,26 +444,32 @@ void addsprintf(std::string& dest, const char* format, const Ts&... ts)
 {
     FormatState state;
 
+    skipToFormat(dest, format);
+
+    auto pt = format;
+
+    while (*pt >= '0' && *pt <= '9') {
+        pt++;
+    }
+
+    if (*pt == '$') {
+        do {
+            printfPositional(dest, format, state, ts...);
+        } while (*format != 0);
+    } else {
+
 #if __cplusplus >= 201703L
-    (printfOne(dest, format, state, ts), ...);
+        (printfOne(dest, format, state, ts), ...);
 #else
-    unpack(dest, format, state, ts...);
+        unpack(dest, format, state, ts...);
 #endif
 
-    while (*format != 0) {
-        char c = *(format++);
-
-        if (c == '%') {
-            if (*format != '%') {
-                std::cerr << "Missing parameter or extraneous format specifier." << std::endl;
-            }
-
-            format++;
+        if (*format != 0) {
+            std::cerr << "Missing parameter or extraneous format specifier." << std::endl;
         }
-
-        dest.push_back(c);
     }
 }
+
 };
 
 namespace tsio
