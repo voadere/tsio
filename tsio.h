@@ -332,13 +332,13 @@ void printfOne(std::string& dest, const char*& format, FormatState& state, const
 
 #if __cplusplus < 201703L
 template <typename T, typename... Ts>
-void unpack(std::string& dest, const char*& format, FormatState& state, const T& t, const Ts&... ts)
+inline void unpack(std::string& dest, const char*& format, FormatState& state, const T& t, const Ts&... ts)
 {
     printfOne(dest, format, state, t);
     unpack(dest, format, state, ts...);
 }
 
-void unpack(std::string& dest, const char*& format, FormatState& state)
+inline void unpack(std::string& dest, const char*& format, FormatState& state)
 {
     // nop
 }
