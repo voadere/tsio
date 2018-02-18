@@ -386,9 +386,26 @@ void printfNth(std::string& dest, FormatState& state, size_t index, const T& t, 
         printfNth(dest, state, index - 1, ts...);
     }
 }
+inline void readSpecNum(int&, FormatState&, size_t)
+{
+    std::cerr << "Invalid position in format." << std::endl;
+}
+
+template <typename T, typename... Ts>
+
+void readSpecNum(int& dest, FormatState& state, size_t index, const T& t, const Ts&... ts)
+{
+    ToSpec<T> toSpec;
+
+    if (index == 1) {
+        dest = toSpec(t);
+    } else {
+        readSpecNum(dest, state, index - 1, ts...);
+    }
+}
 #else
 template <typename T, typename... Ts>
-bool printfNth(std::string& dest, FormatState& state, size_t index, const T& t, const Ts&... ts)
+bool printfDispatch(std::string& dest, FormatState& state, size_t index, const T& t, const Ts&... ts)
 {
     if (index == 1) {
         printfDetail(dest, state, t);
@@ -397,10 +414,40 @@ bool printfNth(std::string& dest, FormatState& state, size_t index, const T& t, 
         return false;
     }
 }
+
+template <typename... Ts>
+void printfNth(std::string& dest, FormatState& state, size_t index,  const Ts&... ts)
+{
+    auto i = state.position + 1;
+
+    static_cast<void>(((i--, printfDispatch(dest, state, i, ts)) || ...));
+}
+
+template <typename T, typename... Ts>
+bool readSpecNumDispatch(int& dest, FormatState& state, size_t index, const T& t, const Ts&... ts)
+{
+    ToSpec<T> toSpec;
+
+    if (index == 1) {
+        dest = toSpec(t);
+        return true;
+    } else {
+        return false;
+    }
+}
+
+template <typename... Ts>
+void readSpecNum(int& dest, FormatState& state, size_t index, const Ts&... ts)
+{
+    auto i = index + 1;
+
+    static_cast<void>(((i--, readSpecNumDispatch(dest, state, i, ts)) || ...));
+}
+
 #endif
 
 template <typename... Ts>
-void printfPositional(std::string& dest, const char*& format, FormatState& state, const Ts&... ts)
+void printfPositionalOne(std::string& dest, const char*& format, FormatState& state, const Ts&... ts)
 {
     if (*format == 0) {
         std::cerr << "Extraneous parameter or missing format specifier." << std::endl;
@@ -414,13 +461,34 @@ void printfPositional(std::string& dest, const char*& format, FormatState& state
         return;
     }
 
-#if __cplusplus < 201703L
-    printfNth(dest, state, state.position, ts...);
-#else
-    auto index = state.position + 1;
+    if (state.active) {
+        if (state.widthDynamic) {
+            int spec;
 
-    static_cast<void>(((index--, printfNth(dest, state, index, ts)) || ...));
-#endif
+            readSpecNum(spec, state, state.widthPosition, ts...);
+
+            if (spec < 0) {
+                state.width = -spec;
+                state.type |= leftJustify;
+            } else {
+                state.width = spec;
+            }
+        }
+
+        if (state.precisionDynamic) {
+            int spec;
+
+            readSpecNum(spec, state, state.precisionPosition, ts...);
+
+            if (spec < 0) {
+                state.precisionGiven = false;
+            } else {
+                state.precision = spec;
+            }
+        }
+    }
+
+    printfNth(dest, state, state.position, ts...);
     state.reset();
     skipToFormat(dest, format);
 }
@@ -454,7 +522,7 @@ void addsprintf(std::string& dest, const char* format, const Ts&... ts)
 
     if (*pt == '$') {
         do {
-            printfPositional(dest, format, state, ts...);
+            printfPositionalOne(dest, format, state, ts...);
         } while (*format != 0);
     } else {
 

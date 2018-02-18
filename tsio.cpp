@@ -300,6 +300,10 @@ void tsioImplementation::FormatState::parse(const char*& format)
                     widthPosition = widthPosition * 10 + (unsigned(ch - '0'));
                     ch = *(format++);
                 }
+
+                if (ch == '$') {
+                    ch = *(format++);
+                }
             }
         } else {
             if (unsigned(ch - '0') < 9) {
@@ -330,6 +334,10 @@ void tsioImplementation::FormatState::parse(const char*& format)
 
                 while (unsigned(ch - '0') < 9) {
                     precisionPosition = precisionPosition * 10 + (unsigned(ch - '0'));
+                    ch = *(format++);
+                }
+
+                if (ch == '$') {
                     ch = *(format++);
                 }
             }

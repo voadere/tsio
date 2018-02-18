@@ -228,6 +228,10 @@ static void testPositional()
 
     sprintf(text, "%2$s, %1$s!", "world", "Hello");
     expect("Hello, world!", text, "");
+
+    sprintf(text, "%2$-*4$s, %1$.*3$s!", "world", "Hello", 3, 20);
+    expect("Hello               , wor!", text, "");
+
 }
 
 static void run()
