@@ -107,6 +107,9 @@ void outputNumber(std::string& dest, long long pNumber, int base, int size, int 
 void printfDetail(std::string& dest, const FormatState& state, const std::string& value);
 void printfDetail(std::string& dest, const FormatState& state, const char* value);
 void printfDetail(std::string& dest, const FormatState& state, double value);
+void printfDetail(std::string& dest, const FormatState& state, float value);
+void printfDetail(std::string& dest, const FormatState& state, bool value);
+void skipToFormat(std::string& dest, const char*& format);
 
 template <typename T>
 inline void printfDetail(std::string& dest, const FormatState& state, const T& value)
@@ -242,24 +245,6 @@ inline void printfDetail(std::string& dest, const FormatState& state, const T* v
     }
 }
 
-inline void printfDetail(std::string& dest, const FormatState& state, float value)
-{
-    printfDetail(dest, state, double(value));
-}
-
-inline void printfDetail(std::string& dest, const FormatState& state, bool value)
-{
-    char format = state.formatSpecifier;
-
-    if (format == 's') {
-        const char* pt = value ? "true" : "false";
-
-        printfDetail(dest, state, pt);
-    } else {
-        printfDetail(dest, state, static_cast<long long>(value));
-    }
-}
-
 template <typename T, typename enable = void>
 struct ToSpec
 {
@@ -278,32 +263,6 @@ struct ToSpec<T, typename std::enable_if<std::is_integral<T>::value>::type>
         return int(value);
     }
 };
-
-inline void skipToFormat(std::string& dest, const char*& format)
-{
-    const char* pt0 = format;
-
-    while (*format != 0) {
-        if (*format == '%') {
-            if (format != pt0) {
-                dest.append(pt0, format - pt0);
-            }
-
-            format++;
-            pt0 = format;
-
-            if (*format != '%') {
-                return;
-            }
-        }
-
-        format++;
-    }
-
-    if (format != pt0) {
-        dest.append(pt0, format - pt0);
-    }
-}
 
 template <typename T>
 void printfOne(std::string& dest, const char*& format, FormatState& state, const T& value)
@@ -386,9 +345,10 @@ void printfNth(std::string& dest, FormatState& state, size_t index, const T& t, 
         printfNth(dest, state, index - 1, ts...);
     }
 }
-inline void readSpecNum(int&, FormatState&, size_t)
+inline void readSpecNum(int& dest, FormatState&, size_t)
 {
     std::cerr << "Invalid position in format." << std::endl;
+    dest = 0;
 }
 
 template <typename T, typename... Ts>
@@ -463,7 +423,7 @@ void printfPositionalOne(std::string& dest, const char*& format, FormatState& st
 
     if (state.active) {
         if (state.widthDynamic) {
-            int spec;
+            int spec = 0;
 
             readSpecNum(spec, state, state.widthPosition, ts...);
 
@@ -476,7 +436,7 @@ void printfPositionalOne(std::string& dest, const char*& format, FormatState& st
         }
 
         if (state.precisionDynamic) {
-            int spec;
+            int spec = 0;
 
             readSpecNum(spec, state, state.precisionPosition, ts...);
 

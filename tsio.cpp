@@ -76,16 +76,13 @@ void tsioImplementation::outputNumber(std::string& dest,
 
     char sign = 0;
     unsigned long long number;
-    const char* lowDigits = "0123456789abcdef";
-    const char* upDigits = "0123456789ABCDEF";
-    const char* digits = (type & upcase) ? upDigits : lowDigits;
     const size_t tmpBufSize = 134; // allow for 128 binary digits plus radix indicator and sign
     char tmpBuf[tmpBufSize];
-    const char digitPairs[] = "0001020304050607080910111213141516171819"
-                              "2021222324252627282930313233343536373839"
-                              "4041424344454647484950515253545556575859"
-                              "6061626364656667686970717273747576777879"
-                              "8081828384858687888990919293949596979899";
+    const char* digitPairs = "0001020304050607080910111213141516171819"
+        "2021222324252627282930313233343536373839"
+        "4041424344454647484950515253545556575859"
+        "6061626364656667686970717273747576777879"
+        "8081828384858687888990919293949596979899";
 
     char* bufPointer = tmpBuf + tmpBufSize;
     char* actualPointer = bufPointer;
@@ -108,7 +105,7 @@ void tsioImplementation::outputNumber(std::string& dest,
         switch (base) {
             case 2:
                 do {
-                    *(--bufPointer) = digits[number & 1];
+                    *(--bufPointer) = char((number & 1) + '0');
                     number >>= 1;
                 } while (number != 0);
 
@@ -127,7 +124,7 @@ void tsioImplementation::outputNumber(std::string& dest,
 
             case 8:
                 do {
-                    *(--bufPointer) = digits[number & 7];
+                    *(--bufPointer) = char((number & 7) + '0');
                     number >>= 3;
                 } while (number != 0);
 
@@ -146,42 +143,71 @@ void tsioImplementation::outputNumber(std::string& dest,
                 break;
 
             case 16:
-                do {
-                    *(--bufPointer) = digits[number & 15];
-                    number >>= 4;
-                } while (number != 0);
+                {
+                    const char* lowDigits = "0123456789abcdef";
+                    const char* upDigits = "0123456789ABCDEF";
+                    const char* digits = (type & upcase) ? upDigits : lowDigits;
 
-                while (bufPointer > precisionPointer) {
-                    *(--bufPointer) = '0';
-                }
+                    do {
+                        *(--bufPointer) = digits[number & 15];
+                        number >>= 4;
+                    } while (number != 0);
 
-                actualPointer = bufPointer;
+                    while (bufPointer > precisionPointer) {
+                        *(--bufPointer) = '0';
+                    }
 
-                if (type & alternative && pNumber != 0) {
-                    *(--bufPointer) = (type & upcase) ? 'X' : 'x';
-                    *(--bufPointer) = '0';
+                    actualPointer = bufPointer;
+
+                    if (type & alternative && pNumber != 0) {
+                        *(--bufPointer) = (type & upcase) ? 'X' : 'x';
+                        *(--bufPointer) = '0';
+                    }
                 }
 
                 break;
 
             case 10:
-                while (number >= 100) {
-                    unsigned long long q = number / 100;
-                    unsigned long long r = (number - q * 100) * 2;
+                if (unsigned(number) == number) {
+                    unsigned uNumber = unsigned(number);
 
-                    *(--bufPointer) = digitPairs[r + 1];
-                    *(--bufPointer) = digitPairs[r];
+                    while (uNumber >= 100) {
+                        unsigned q = uNumber / 100;
+                        unsigned r = (uNumber - q * 100) * 2;
 
-                    number = q;
-                }
+                        *(--bufPointer) = digitPairs[r + 1];
+                        *(--bufPointer) = digitPairs[r];
 
-                if (number >= 10) {
-                    unsigned long long r = number * 2;
+                        uNumber = q;
+                    }
 
-                    *(--bufPointer) = digitPairs[r + 1];
-                    *(--bufPointer) = digitPairs[r];
+                    if (uNumber >= 10) {
+                        unsigned long long r = uNumber * 2;
+
+                        *(--bufPointer) = digitPairs[r + 1];
+                        *(--bufPointer) = digitPairs[r];
+                    } else {
+                        *(--bufPointer) = char(uNumber + '0');
+                    }
                 } else {
-                    *(--bufPointer) = char(number + '0');
+                    while (number >= 100) {
+                        unsigned long long q = number / 100;
+                        unsigned long long r = (number - q * 100) * 2;
+
+                        *(--bufPointer) = digitPairs[r + 1];
+                        *(--bufPointer) = digitPairs[r];
+
+                        number = q;
+                    }
+
+                    if (number >= 10) {
+                        unsigned long long r = number * 2;
+
+                        *(--bufPointer) = digitPairs[r + 1];
+                        *(--bufPointer) = digitPairs[r];
+                    } else {
+                        *(--bufPointer) = char(number + '0');
+                    }
                 }
 
                 while (bufPointer > precisionPointer) {
@@ -191,17 +217,6 @@ void tsioImplementation::outputNumber(std::string& dest,
                 actualPointer = bufPointer;
 
                 break;
-
-            default:
-                do {
-                    unsigned long long q = number / base;
-                    unsigned long long r = number - q * base;
-
-                    *(--bufPointer) = digits[r];
-                    number = q;
-                } while (number != 0);
-
-                actualPointer = bufPointer;
         }
     } else {
         /// This is a hack to overcome an inconsistency between '%.x' and '%.o' formatting.
@@ -242,8 +257,10 @@ void tsioImplementation::outputNumber(std::string& dest,
     }
 }
 
-void tsioImplementation::FormatState::parse(const char*& format)
+void tsioImplementation::FormatState::parse(const char*& f)
 {
+    const char* format = f;
+
     unsigned char ch = *(format++);
 
     if (ch >= '1' && ch <= '9') {
@@ -367,6 +384,7 @@ void tsioImplementation::FormatState::parse(const char*& format)
     }
 
     formatSpecifier = ch;
+    f = format;
 }
 
 const char* tsioImplementation::FormatState::unParse() const
@@ -626,6 +644,54 @@ void tsioImplementation::printfDetail(std::string& dest, const FormatState& stat
         default:
             std::cerr << "Invalid format '" << format << "' for floating point value" << std::endl;
     }
+}
+
+void tsioImplementation::printfDetail(std::string& dest, const FormatState& state, float value)
+{
+    printfDetail(dest, state, double(value));
+}
+
+void tsioImplementation::printfDetail(std::string& dest, const FormatState& state, bool value)
+{
+    char format = state.formatSpecifier;
+
+    if (format == 's') {
+        const char* pt = value ? "true" : "false";
+
+        printfDetail(dest, state, pt);
+    } else {
+        printfDetail(dest, state, static_cast<long long>(value));
+    }
+}
+
+void tsioImplementation::skipToFormat(std::string& dest, const char*& format)
+{
+    const char* f = format;
+    const char* pt0 = f;
+
+    while (*f != 0) {
+        if (*f == '%') {
+            if (f != pt0) {
+                dest.append(pt0, f - pt0);
+            }
+
+            f++;
+            pt0 = f;
+
+            if (*f != '%') {
+                format = f;
+                return;
+            }
+        }
+
+        f++;
+    }
+
+    if (f != pt0) {
+        dest.append(pt0, f - pt0);
+    }
+
+    format = f;
 }
 
 
