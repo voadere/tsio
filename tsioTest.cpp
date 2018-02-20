@@ -254,32 +254,11 @@ static void test()
 
 static void examples()
 {
-    std::string str;
-    short s = 123;
-    int i = 42;
-    float f = float(234.567);
-    double d = 345.678;
-    const char* ch = "Don't panic";
+    std::vector<int> v = {10, 200, 3000 };
+    std::array<double, 3> a = { 10.11, 200.222, 3000.3333 };
 
-    short n1;
-    int n2;
-
-    sprintf(str, "%-15s,%2$n%12i,%d,%12.2f,%n%7.1E;%a", ch, &n1, s, i, f, &n2, d, d);
-
-    std::cout << str << '\n';
-    std::cout << "n1 = " << n1 << '\n';
-    std::cout << "n2 = " << n2 << '\n';
-
-    std::cout << fmt("%-15s") << ch << ',' << fmt("%12i") << s << ',' << fmt("d") << i << ',' << fmt("12.2f")
-              << f << ',' << fmt("%7.1E") << d << ',' << fmt("a") << d << fmt() << '\n';
-
-    std::cout << '\n';
-
-    std::cout << fmt("-12.2f") << f << '\n';
-    std::cout << std::setw(12) << std::setprecision(2) << std::left << std::fixed << f << '\n';
-    std::cout << '\n';
-
-    std::cout << fstring("%30s", ch) << '\n';
+    oprintf("vector { %10d }\n", v);
+    oprintf("array { %10.3f }\n", a);
 }
 
 int main(int argc, char* argv[])
@@ -296,13 +275,9 @@ int main(int argc, char* argv[])
         run();
     }
 
-//  examples();
+    examples();
 
-    fprintf(std::cout,
-            "    %d sprintf tests executed in %4.2f seconds\n",
+    oprintf("    %d sprintf tests executed in %4.2f seconds\n",
             count,
             double(clock() / double(CLOCKS_PER_SEC)));
-
-    std::cout << "    " << fmt("%d") << count << " sprintf tests executed in " << fmt("4.2f")
-              << double(clock() / double(CLOCKS_PER_SEC)) << " seconds\n";
 }

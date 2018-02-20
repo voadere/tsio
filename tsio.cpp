@@ -257,6 +257,11 @@ void tsioImplementation::outputNumber(std::string& dest,
     }
 }
 
+tsioImplementation::FormatState::FormatState(const char*& format)
+{
+    parse(format);
+}
+
 void tsioImplementation::FormatState::parse(const char*& f)
 {
     const char* format = f;

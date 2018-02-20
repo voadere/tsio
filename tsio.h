@@ -29,18 +29,16 @@
 #ifndef FORMATTER_H
 #define FORMATTER_H
 
-#include <algorithm>
+#include <array>
 #include <iomanip>
 #include <iostream>
 #include <limits>
 #include <string.h>
 #include <string>
+#include <vector>
 
 namespace tsioImplementation
 {
-extern bool initialized;
-void initialize();
-
 enum {
     zerofill = 1,
     signedNumber = zerofill << 1,
@@ -69,10 +67,7 @@ struct FormatState
     mutable char buf[31]; // enough for 5 flags, 2 ints, a dot and a specifier.
 
     FormatState() = default;
-    FormatState(const char*& format)
-    {
-        parse(format);
-    }
+    FormatState(const char*& format);
 
     void parse(const char*& format);
 
@@ -109,6 +104,7 @@ void printfDetail(std::string& dest, const FormatState& state, const char* value
 void printfDetail(std::string& dest, const FormatState& state, double value);
 void printfDetail(std::string& dest, const FormatState& state, float value);
 void printfDetail(std::string& dest, const FormatState& state, bool value);
+
 void skipToFormat(std::string& dest, const char*& format);
 
 template <typename T>
@@ -243,6 +239,22 @@ inline void printfDetail(std::string& dest, const FormatState& state, const T* v
         default:
             printfDetail(dest, state, static_cast<uintptr_t>(pValue));
     }
+}
+
+template <typename T>
+inline void printfDetail(std::string& dest, const FormatState& state, const std::vector<T>& value)
+{
+    for (const auto& v : value) {
+        printfDetail(dest, state, v);
+    };
+}
+
+template <typename T, size_t N>
+inline void printfDetail(std::string& dest, const FormatState& state, const std::array<T, N>& value)
+{
+    for (const auto& v : value) {
+        printfDetail(dest, state, v);
+    };
 }
 
 template <typename T, typename enable = void>
@@ -407,14 +419,14 @@ void readSpecNum(int& dest, FormatState& state, size_t index, const Ts&... ts)
 #endif
 
 template <typename... Ts>
-void printfPositionalOne(std::string& dest, const char*& format, FormatState& state, const Ts&... ts)
+void printfPositionalOne(std::string& dest, const char*& format, const Ts&... ts)
 {
     if (*format == 0) {
         std::cerr << "Extraneous parameter or missing format specifier." << std::endl;
         return;
     }
 
-    state.parse(format);
+    FormatState state(format);
 
     if (state.position == 0) {
         std::cerr << "Positional arguments can not be mixed with sequential arguments." << std::endl;
@@ -449,7 +461,7 @@ void printfPositionalOne(std::string& dest, const char*& format, FormatState& st
     }
 
     printfNth(dest, state, state.position, ts...);
-    state.reset();
+
     skipToFormat(dest, format);
 }
 
@@ -470,8 +482,6 @@ inline void unpack(std::string& dest, const char*& format, FormatState& state)
 template <typename... Ts>
 void addsprintf(std::string& dest, const char* format, const Ts&... ts)
 {
-    FormatState state;
-
     skipToFormat(dest, format);
 
     auto pt = format;
@@ -482,9 +492,10 @@ void addsprintf(std::string& dest, const char* format, const Ts&... ts)
 
     if (*pt == '$') {
         do {
-            printfPositionalOne(dest, format, state, ts...);
+            printfPositionalOne(dest, format, ts...);
         } while (*format != 0);
     } else {
+        FormatState state;
 
 #if __cplusplus >= 201703L
         (printfOne(dest, format, state, ts), ...);
@@ -528,43 +539,65 @@ inline std::ostream& operator<<(std::ostream& out, const fmt& f)
     return f(out);
 }
 
-template <typename... Ts>
-int sprintf(std::string& dest, const char* format, const Ts&... ts)
+template <typename... Arguments>
+int sprintf(std::string& dest, const char* format, const Arguments&... arguments)
 {
     dest.clear();
 
-    tsioImplementation::addsprintf(dest, format, ts...);
+    tsioImplementation::addsprintf(dest, format, arguments...);
 
     return int(dest.size());
 }
 
-template <typename... Ts>
-int addsprintf(std::string& dest, const char* format, const Ts&... ts)
+template <typename... Arguments>
+int addsprintf(std::string& dest, const char* format, const Arguments&... arguments)
 {
     auto startSize = dest.size();
 
-    tsioImplementation::addsprintf(dest, format, ts...);
+    tsioImplementation::addsprintf(dest, format, arguments...);
 
     return int(dest.size() - startSize);
 }
 
-template <typename... Ts>
-int fprintf(std::ostream& os, const char* format, const Ts&... ts)
+template <typename... Arguments>
+int fprintf(std::ostream& os, const char* format, const Arguments&... arguments)
 {
     std::string tmp;
 
-    tsioImplementation::addsprintf(tmp, format, ts...);
+    tsioImplementation::addsprintf(tmp, format, arguments...);
     os << tmp;
 
     return int(tmp.size());
 }
 
-template <typename... Ts>
-std::string fstring(const char* format, const Ts&... ts)
+template <typename... Arguments>
+int oprintf(const char* format, const Arguments&... arguments)
 {
     std::string tmp;
 
-    tsioImplementation::addsprintf(tmp, format, ts...);
+    tsioImplementation::addsprintf(tmp, format, arguments...);
+    std::cout << tmp;
+
+    return int(tmp.size());
+}
+
+template <typename... Arguments>
+int eprintf(const char* format, const Arguments&... arguments)
+{
+    std::string tmp;
+
+    tsioImplementation::addsprintf(tmp, format, arguments...);
+    std::cerr << tmp;
+
+    return int(tmp.size());
+}
+
+template <typename... Arguments>
+std::string fstring(const char* format, const Arguments&... arguments)
+{
+    std::string tmp;
+
+    tsioImplementation::addsprintf(tmp, format, arguments...);
 
     return tmp;
 }
