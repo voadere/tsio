@@ -10,8 +10,11 @@ tsio: type safe, printf compatible sprintf and fprintf functions, and an io mani
    - errors during formatting are printed on 'std::cerr'; no negative
      value is ever returned.
 
+  tsio::oprintf and tsio::eprintf generate output on std::cout and
+  std::cerr respectively.
+
   'tsio::sprintf' takes a reference to a 'std::string' as it's first
-  parameter.  'tsio::fprintf' takes a reference to a 'std::ostream'
+  arguments.  'tsio::fprintf' takes a reference to a 'std::ostream'
 
   Extra format specifer '%C' acts like '%c' but prints a '.' for
   non-printable characters.
@@ -20,7 +23,9 @@ tsio: type safe, printf compatible sprintf and fprintf functions, and an io mani
 
   Length modifiers are not required and thus ignored.
 
-  Allows 'std::string' as parameter for string formatting.
+  Allows 'std::string' as argument for string formatting.
+
+  Allows 'std::vector' and 'std::array' as arguments.
 
   the 'tsio' functions have approximately the same speed as 'std::sprintf'
   (integer and string formatting is somewhat faster; floating point formatting
@@ -43,7 +48,7 @@ tsio: type safe, printf compatible sprintf and fprintf functions, and an io mani
 
   It is usualy safe to specify 'using namespace tsio;', since the compiler can
   disambiguate 'tsio::sprintf' and 'tsio::fprintf' from 'std::sprintf' and
-  'std::fprintf' by the type of the first parameter.  Other names in the
+  'std::fprintf' by the type of the first argument.  Other names in the
   'tsio' namespace don't clash with 'std' names.
   Of course, clashes with names in your application may preclude the use
   of the 'using namespace tsio;' statement.
@@ -83,7 +88,21 @@ tsio: type safe, printf compatible sprintf and fprintf functions, and an io mani
   results in:
     "Don't panic    ,         123,42,      234.57,3.5E+02,0x1.59ad916872b02p+8"
 
-- Examples of positional parameters:
+- Example of vector as argument:
+    std::vector<int> v = {10, 200, 3000 };
+    oprintf("vector { %10d }\n", v);
+
+  results in:
+    vector {         10       200      3000 }
+
+- Example of array as argument:
+    std::array<double, 3> a = { 10.11, 200.222, 3000.3333 };
+    oprintf("array { %10.3f }\n", a);
+
+  results in:
+    array {     10.110   200.222  3000.333 }
+    
+- Examples of positional arguments:
     sprintf(text, "%2$s, %1$s!", "world", "Hello");
 
   results in:

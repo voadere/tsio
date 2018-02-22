@@ -110,8 +110,6 @@ void skipToFormat(std::string& dest, const char*& format);
 template <typename T>
 inline void printfDetail(std::string& dest, const FormatState& state, const T& value)
 {
-    static char niceChar[256] = {0};
-    char charBuf[2];
     typename std::make_signed<T>::type sValue = value;
     typename std::make_unsigned<T>::type uValue = value;
     char format = state.formatSpecifier;
@@ -127,30 +125,102 @@ inline void printfDetail(std::string& dest, const FormatState& state, const T& v
             outputNumber(dest, uValue, 2, state.width, state.precision, type);
             break;
 
-        case 'c':
-            *charBuf = char(value);
-            charBuf[1] = 0;
+        case 'c': {
+            char c = char(value);
             outputString(dest,
-                    charBuf,
+                    &c,
+                    1,
                     state.width,
                     state.precisionGiven ? (state.precision > 0 ? state.precision : 1)
                     : std::numeric_limits<int>::max(),
                     type);
+            }
 
             break;
 
         case 'C':
-            if (*niceChar == 0) {
-                memset(niceChar, '.', sizeof niceChar);
+            if (type && alternative) {
+                char buf[5];
+                const char* pt;
+                char c = value & 0xff;
 
-                for (int cnt = ' '; cnt <= '~'; ++cnt) {
-                    niceChar[cnt] = char(cnt);
+                switch (c) {
+                    case '\a':
+                        pt = "\\a";
+                        break;
+
+                    case '\b':
+                        pt = "\\b";
+                        break;
+
+                    case '\f':
+                        pt = "\\f";
+                        break;
+
+                    case '\n':
+                        pt = "\\n";
+                        break;
+
+                    case '\r':
+                        pt = "\\r";
+                        break;
+
+                    case '\t':
+                        pt = "\\t";
+                        break;
+
+                    case '\v':
+                        pt = "\\v";
+                        break;
+
+                    case '\\':
+                        pt = "\\\\";
+                        break;
+
+                    case '\"':
+                        pt = "\\\"";
+                        break;
+
+                    case '\'':
+                        pt = "\\\'";
+                        break;
+
+                    default:
+                        if (c < ' ' || c > '~') {
+                            buf[0] = '\\';
+                            buf[1] = ((c >> 6) & 0x3) + '0';
+                            buf[2] = ((c >> 3) & 0x7) + '0';
+                            buf[3] = ((c     ) & 0x7) + '0';
+                            buf[4] = '\0';
+                        } else {
+                            buf[0] = c;
+                            buf[1] = '\0';
+                        }
+
+                        pt = buf;
                 }
-            }
 
-            *charBuf = niceChar[value & 0xff];
-            charBuf[1] = 0;
-            outputString(dest, charBuf, state.width, state.precision, type);
+                outputString(dest,
+                        pt,
+                        state.width,
+                        state.precisionGiven ? (state.precision > 0 ? state.precision : 1)
+                        : std::numeric_limits<int>::max(),
+                        type);
+            } else {
+                char c = value & 0xff;
+
+                if (c < ' ' || c > '~') {
+                    c = '.';
+                }
+
+                outputString(dest,
+                        &c,
+                        1,
+                        state.width,
+                        state.precisionGiven ? (state.precision > 0 ? state.precision : 1)
+                        : std::numeric_limits<int>::max(),
+                        type);
+            }
 
             break;
 
