@@ -38,6 +38,17 @@ static const char* flagsCombo[] = {"",     " ",   " 0", " 0-", " 0-+", " 0-+#", 
                                    " #",   "0",   "0-", "0-+", "0-+#", "0-#",   "0+",   "0+#",
                                    "0#",   "-",   "-+", "-+#", "-#",   "+",     "+#",   "#"};
 
+template <typename E, typename F>
+void expect(const E& expected, const F& found)
+{
+    if (expected != found) {
+        std::cerr << "Expected '" << expected << "'; found '" << found << "'."
+                  << std::endl;
+    }
+
+    count++;
+}
+
 template <typename E, typename F, typename T>
 void expect(const E& expected, const F& found, const T& value)
 {
@@ -200,17 +211,17 @@ static void testPrintfN()
 
     sprintf(buf, "12345%n67890", &iSize);
     sprintf(text, "12345%n67890", &jSize);
-    expect("1234567890", text, "");
-    expect(iSize, jSize, "");
+    expect("1234567890", text);
+    expect(iSize, jSize);
 
     sprintf(text, "12345678%n90", &sSize);
-    expect("1234567890", text, "");
-    expect(8, sSize, "");
+    expect("1234567890", text);
+    expect(8, sSize);
 
     sprintf(text, "Hello ");
     addsprintf(text, "World%n!", &sSize);
-    expect("Hello World!", text, "");
-    expect(11, sSize, "");
+    expect("Hello World!", text);
+    expect(11, sSize);
 }
 
 static void testPrintString()
@@ -219,18 +230,21 @@ static void testPrintString()
     std::string s = "abcde";
 
     sprintf(text, "%s", s);
-    expect("abcde", text, "");
+    expect("abcde", text);
 }
 
 static void testPositional()
 {
     std::string text;
+    char buf[128];
 
     sprintf(text, "%2$s, %1$s!", "world", "Hello");
-    expect("Hello, world!", text, "");
+    sprintf(buf, "%2$s, %1$s!", "world", "Hello");
+    expect(buf, text);
 
     sprintf(text, "%2$-*4$s, %1$.*3$s!", "world", "Hello", 3, 20);
-    expect("Hello               , wor!", text, "");
+    sprintf(buf, "%2$-*4$s, %1$.*3$s!", "world", "Hello", 3, 20);
+    expect(buf, text);
 
 }
 
@@ -238,25 +252,25 @@ static void extensions()
 {
     std::string text = fstring("%C %C", '\x12', 'a');
 
-    expect(". a", text, "");
+    expect(". a", text);
 
     text = fstring("%#C %#C %#C", '\a', 'a', '\x5');
-    expect("\\a a \\005", text, "");
+    expect("\\a a \\005", text);
 
     std::vector<int> v = {10, 200, 3000 };
 
     text = fstring("vector { %10d }", v);
-    expect("vector {         10       200      3000 }", text, "");
+    expect("vector {         10       200      3000 }", text);
 
     std::array<double, 3> a = { 10.11, 200.222, 3000.3333 };
 
     text = fstring("array { %10.3f }", a);
-    expect("array {     10.110   200.222  3000.333 }", text, "");
+    expect("array {     10.110   200.222  3000.333 }", text);
 
     std::array<char,256> a1;
 
     for (int i = 0; i < 256; ++i) {
-        a1[i] = i;
+        a1[i] = char(i);
     }
 
     text = fstring("%#5C", a1);
@@ -287,7 +301,37 @@ static void extensions()
             "\\346 \\347 \\350 \\351 \\352 \\353 \\354 \\355 \\356 \\357 "
             "\\360 \\361 \\362 \\363 \\364 \\365 \\366 \\367 \\370 \\371 "
             "\\372 \\373 \\374 \\375 \\376 \\377",
-        text, "");
+        text);
+
+    text = fstring("'%S'", "12\a\b\f34");
+    expect("'12...34'", text);
+
+
+    text = fstring("'%#S'", "12\a\b\f34");
+    expect("'12\\a\\b\\f34'", text);
+
+    text = fstring("'%^20s'", "1234");
+    expect("'        1234        '", text);
+
+    text = fstring("'%^20s'", "abc");
+    expect("'        abc         '", text);
+
+    text = fstring("'%+'*\"@20d'", 123);
+    expect("'+****************123'", text);
+
+    text = fstring("'%+\"@20d'", 123);
+    expect("'@@@@@@@@@@@@@@@@+123'", text);
+
+    text = fstring("'%^\"*20s'", "abc");
+    expect("'********abc*********'", text);
+
+    std::string str("This is a std::string");
+
+    text = fstring("'%s %s %s %s %s'", 123, 234.567, true, false, str);
+    expect("'123 234.567 true false This is a std::string'", text);
+
+    text = fstring("'%06s %5.2s %10.3s'", 123, 234.567, 98.765);
+    expect("'000123 2.3e+02       98.8'", text);
 }
 
 static void run()
@@ -306,11 +350,14 @@ static void test()
 {
     std::string text;
 
-    sprintf(text, "t: '%.d'", 0);
+    sprintf(text, "t: '% 0*d'", 15, 1234);
 }
 
 static void examples()
 {
+    std::string text;
+
+    std::cout << text << '\n';
 }
 
 int main(int argc, char* argv[])

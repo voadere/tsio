@@ -16,25 +16,21 @@ tsio: type safe, printf compatible sprintf and fprintf functions, and an io mani
   'tsio::sprintf' takes a reference to a 'std::string' as it's first
   arguments.  'tsio::fprintf' takes a reference to a 'std::ostream'
 
-  Extra format specifer '%C' acts like '%c' but prints a '.' for
-  non-printable characters.
-
-  '%s' format is implemented for all types, and uses a default formatting.
-
-  Length modifiers are not required and thus ignored.
-
-  Allows 'std::string' as argument for string formatting.
-
-  Allows 'std::vector' and 'std::array' as arguments.
+  'tsio::fstring' returns a formatted std::string;
 
   the 'tsio' functions have approximately the same speed as 'std::sprintf'
   (integer and string formatting is somewhat faster; floating point formatting
   is somewhat slower).
 
+  It is usualy safe to specify 'using namespace tsio;', since the compiler can
+  disambiguate 'tsio::sprintf' and 'tsio::fprintf' from 'std::sprintf' and
+  'std::fprintf' by the type of the first argument.  Other names in the
+  'tsio' namespace don't clash with 'std' names.
+  Of course, clashes with names in your application may preclude the use
+  of the 'using namespace tsio;' statement.
+
   A test program is provided that exhaustively checks the results of
   'fmt::sprintf' amd 'std::sprintf' for equality.
-
-  'tsio::fstring' returns a formatted std::string;
 
   The 'tsio::fmt' io manipulator sets stream flags according to
   a format.  It uses the same formats as sprintf, but the effects are
@@ -45,13 +41,6 @@ tsio: type safe, printf compatible sprintf and fprintf functions, and an io mani
 
   'os << tsio::fmt()' can be used to reset all flags that are used in formatting
   to their default values.
-
-  It is usualy safe to specify 'using namespace tsio;', since the compiler can
-  disambiguate 'tsio::sprintf' and 'tsio::fprintf' from 'std::sprintf' and
-  'std::fprintf' by the type of the first argument.  Other names in the
-  'tsio' namespace don't clash with 'std' names.
-  Of course, clashes with names in your application may preclude the use
-  of the 'using namespace tsio;' statement.
 
 
 - Example of sprintf:

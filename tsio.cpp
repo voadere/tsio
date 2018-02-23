@@ -34,17 +34,102 @@ void tsioImplementation::outputString(std::string& dest,
                                       size_t s,
                                       int minSize,
                                       int maxSize,
-                                      unsigned type)
+                                      unsigned type,
+                                      char fillCharacter)
 {
     if (text == nullptr) {
         return;
     }
 
-    int cnt = 0;
+    std::string tmp;
     int size = int(s);
+
+    if (type & nice) {
+        if (type & alternative) {
+            for (int i = 0; i < size; ++i) {
+                char c = text[i];
+
+                char buf[5];
+                const char* pt;
+
+                switch (c) {
+                    case '\a':
+                        pt = "\\a";
+                        break;
+
+                    case '\b':
+                        pt = "\\b";
+                        break;
+
+                    case '\f':
+                        pt = "\\f";
+                        break;
+
+                    case '\n':
+                        pt = "\\n";
+                        break;
+
+                    case '\r':
+                        pt = "\\r";
+                        break;
+
+                    case '\t':
+                        pt = "\\t";
+                        break;
+
+                    case '\v':
+                        pt = "\\v";
+                        break;
+
+                    case '\\':
+                        pt = "\\\\";
+                        break;
+
+                    case '\"':
+                        pt = "\\\"";
+                        break;
+
+                    case '\'':
+                        pt = "\\\'";
+                        break;
+
+                    default:
+                        if (c < ' ' || c > '~') {
+                            buf[0] = '\\';
+                            buf[1] = ((c >> 6) & 0x3) + '0';
+                            buf[2] = ((c >> 3) & 0x7) + '0';
+                            buf[3] = ((c     ) & 0x7) + '0';
+                            buf[4] = '\0';
+                        } else {
+                            buf[0] = c;
+                            buf[1] = '\0';
+                        }
+
+                        pt = buf;
+                }
+
+                tmp += pt;
+            }
+        } else {
+            for (int i = 0; i < size; ++i) {
+                char c = text[i];
+
+                tmp.push_back((c < ' ' || c > '~') ? '.' : c);
+            }
+        }
+
+        text = tmp.c_str();
+        size = tmp.size();
+    }
+
+    int cnt = 0;
 
     if (size > maxSize) {
         size = maxSize;
+    }
+
+    if (!(type & alfafill)) {
+        fillCharacter = ' ';
     }
 
     if (type & leftJustify) {
@@ -52,11 +137,24 @@ void tsioImplementation::outputString(std::string& dest,
         cnt += size;
 
         if (minSize - cnt > 0) {
-            dest.append(minSize - cnt, ' ');
+            dest.append(minSize - cnt, fillCharacter);
+        }
+    } else if (type & centerJustify) {
+        int delta = minSize - cnt - size;
+
+        if (delta / 2 > 0) {
+            dest.append(delta / 2, fillCharacter);
+            delta -= delta / 2;
+        }
+
+        dest.append(text, size);
+
+        if (delta > 0) {
+            dest.append(delta, fillCharacter);
         }
     } else {
         if (minSize - size > 0) {
-            dest.append(minSize - size, ' ');
+            dest.append(minSize - size, fillCharacter);
         }
 
         dest.append(text, size);
@@ -68,7 +166,8 @@ void tsioImplementation::outputNumber(std::string& dest,
                                       int base,
                                       int size,
                                       int precision,
-                                      unsigned type)
+                                      unsigned type,
+                                      char fillCharacter)
 {
     if (precision < 0) {
         precision = 0;
@@ -168,46 +267,35 @@ void tsioImplementation::outputNumber(std::string& dest,
                 break;
 
             case 10:
-                if (unsigned(number) == number) {
-                    unsigned uNumber = unsigned(number);
+                while (unsigned(number) != number) {
+                    unsigned long long q = number / 100;
+                    unsigned long long r = (number % 100) * 2;
 
-                    while (uNumber >= 100) {
-                        unsigned q = uNumber / 100;
-                        unsigned r = (uNumber - q * 100) * 2;
+                    *(--bufPointer) = digitPairs[r + 1];
+                    *(--bufPointer) = digitPairs[r];
 
-                        *(--bufPointer) = digitPairs[r + 1];
-                        *(--bufPointer) = digitPairs[r];
+                    number = q;
+                }
 
-                        uNumber = q;
-                    }
+                unsigned uNumber = unsigned(number);
 
-                    if (uNumber >= 10) {
-                        unsigned long long r = uNumber * 2;
+                while (uNumber >= 100) {
+                    unsigned q = uNumber / 100;
+                    unsigned r = (uNumber % 100) * 2;
 
-                        *(--bufPointer) = digitPairs[r + 1];
-                        *(--bufPointer) = digitPairs[r];
-                    } else {
-                        *(--bufPointer) = char(uNumber + '0');
-                    }
+                    *(--bufPointer) = digitPairs[r + 1];
+                    *(--bufPointer) = digitPairs[r];
+
+                    uNumber = q;
+                }
+
+                if (uNumber >= 10) {
+                    unsigned long long r = uNumber * 2;
+
+                    *(--bufPointer) = digitPairs[r + 1];
+                    *(--bufPointer) = digitPairs[r];
                 } else {
-                    while (number >= 100) {
-                        unsigned long long q = number / 100;
-                        unsigned long long r = (number - q * 100) * 2;
-
-                        *(--bufPointer) = digitPairs[r + 1];
-                        *(--bufPointer) = digitPairs[r];
-
-                        number = q;
-                    }
-
-                    if (number >= 10) {
-                        unsigned long long r = number * 2;
-
-                        *(--bufPointer) = digitPairs[r + 1];
-                        *(--bufPointer) = digitPairs[r];
-                    } else {
-                        *(--bufPointer) = char(number + '0');
-                    }
+                    *(--bufPointer) = char(uNumber + '0');
                 }
 
                 while (bufPointer > precisionPointer) {
@@ -236,21 +324,21 @@ void tsioImplementation::outputNumber(std::string& dest,
         dest.append(bufPointer, bytesNeeded);
 
         if (size > bytesNeeded) {
-            dest.append(size - bytesNeeded, ' ');
+            dest.append(size - bytesNeeded, (type & alfafill) ? fillCharacter : ' ');
         }
-    } else if (type & zerofill) {
+    } else if (type & numericfill) {
         auto prefixSize = actualPointer - bufPointer;
 
         dest.append(bufPointer, prefixSize);
 
         if (size > bytesNeeded) {
-            dest.append(size - bytesNeeded, '0');
+            dest.append(size - bytesNeeded, fillCharacter);
         }
 
         dest.append(actualPointer, actualDigits);
     } else {
         if (size > bytesNeeded) {
-            dest.append(size - bytesNeeded, ' ');
+            dest.append(size - bytesNeeded, (type & alfafill) ? fillCharacter : ' ');
         }
 
         dest.append(bufPointer, bytesNeeded);
@@ -290,22 +378,62 @@ void tsioImplementation::FormatState::parse(const char*& f)
     }
 
     if (!widthGiven) {
+        char alfaFill = ' ';
+        char numericFill = ' ';
+
         for (;;) {
             if (ch == '0') {
-                type |= zerofill;
+                type |= numericfill;
+                numericFill = '0';
             } else if (ch == '-') {
                 type |= leftJustify;
+            } else if (ch == '^') {
+                type |= centerJustify;
             } else if (ch == '+') {
                 type |= plusIfPositive;
             } else if (ch == ' ') {
                 type |= spaceIfPositive;
             } else if (ch == '#') {
                 type |= alternative;
+            } else if (ch == '\'') {
+                type |= numericfill;
+
+                if (*format != 0) {
+                    numericFill = *(format++);
+                }
+            } else if (ch == '\"') {
+                type |= alfafill;
+
+                if (*format != 0) {
+                    alfaFill = *(format++);
+                }
             } else {
                 break;
             }
 
             ch = *(format++);
+        }
+
+        if ((type & (plusIfPositive | spaceIfPositive)) == (plusIfPositive | spaceIfPositive)) {
+            type &= ~spaceIfPositive;
+        }
+
+        if ((type & (leftJustify | numericfill)) == (leftJustify | numericfill)) {
+            type &= ~numericfill;
+        }
+
+        if ((type & (centerJustify | numericfill)) == (centerJustify | numericfill)) {
+            type &= ~numericfill;
+        }
+
+        if ((type & (alfafill | numericfill)) == (alfafill | numericfill)) {
+            type &= ~alfafill;
+        }
+
+        if (type & numericfill) {
+            fillCharacter = numericFill;
+        } else if (type & alfafill) {
+            fillCharacter = alfaFill;
         }
 
         if (ch == '*') {
@@ -380,18 +508,15 @@ void tsioImplementation::FormatState::parse(const char*& f)
         ch = *(format++);
     }
 
-    if ((type & (plusIfPositive | spaceIfPositive)) == (plusIfPositive | spaceIfPositive)) {
-        type &= ~spaceIfPositive;
-    }
-
-    if ((type & (leftJustify | zerofill)) == (leftJustify | zerofill)) {
-        type &= ~zerofill;
-    }
-
     formatSpecifier = ch;
-    f = format;
+    if (ch == 0) {
+        f = format - 1;
+    } else {
+        f = format;
+    }
 }
 
+// unparse generates a standard format.  Extensions are mostly not generated.
 const char* tsioImplementation::FormatState::unParse() const
 {
     buf[30] = 0;
@@ -426,7 +551,7 @@ const char* tsioImplementation::FormatState::unParse() const
     }
 
     if (type != 0) {
-        if (type & zerofill) {
+        if (type & numericfill) {
             *(--pt) = '0';
         }
 
@@ -484,9 +609,13 @@ std::ostream& tsio::fmt::operator()(std::ostream& out) const
         out.setf(std::ios::left, std::ios::adjustfield);
     }
 
-    if (state.type & zerofill) {
-        out.fill('0');
+    if (state.type & numericfill) {
+        out.fill(state.fillCharacter);
         out.setf(std::ios::internal, std::ios::adjustfield);
+    }
+
+    if (state.type & alfafill) {
+        out.fill(state.fillCharacter);
     }
 
     if (state.type & plusIfPositive) {
@@ -564,15 +693,31 @@ void tsioImplementation::printfDetail(std::string& dest, const FormatState& stat
 {
     char format = state.formatSpecifier;
 
-    if (format == 's') {
-        outputString(dest,
-                value.c_str(),
-                value.size(),
-                state.width,
-                state.precisionGiven ? state.precision : std::numeric_limits<int>::max(),
-                state.type);
-    } else {
-        std::cerr << "Invalid format '" << format << "' for std::string value" << std::endl;
+    switch (format) {
+        case 's':
+            outputString(dest,
+                    value.c_str(),
+                    value.size(),
+                    state.width,
+                    state.precisionGiven ? state.precision : std::numeric_limits<int>::max(),
+                    state.type,
+                    state.fillCharacter);
+
+            break;
+
+        case 'S':
+            outputString(dest,
+                    value.c_str(),
+                    value.size(),
+                    state.width,
+                    state.precisionGiven ? state.precision : std::numeric_limits<int>::max(),
+                    state.type | nice,
+                    state.fillCharacter);
+
+            break;
+
+        default:
+            std::cerr << "Invalid format '" << format << "' for std::string value" << std::endl;
     }
 }
 
@@ -583,7 +728,8 @@ void tsioImplementation::printfDetail(std::string& dest, const FormatState& stat
 
     switch (format) {
         case 'p':
-            outputNumber(dest, pValue, 16, state.width, state.precision, state.type | alternative);
+            outputNumber(dest, pValue, 16, state.width, state.precision, state.type | alternative,
+                    state.fillCharacter);
 
             break;
 
@@ -592,7 +738,18 @@ void tsioImplementation::printfDetail(std::string& dest, const FormatState& stat
                     value,
                     state.width,
                     state.precisionGiven ? state.precision : std::numeric_limits<int>::max(),
-                    state.type);
+                    state.type,
+                    state.fillCharacter);
+
+            break;
+
+        case 'S':
+            outputString(dest,
+                    value,
+                    state.width,
+                    state.precisionGiven ? state.precision : std::numeric_limits<int>::max(),
+                    state.type | nice,
+                    state.fillCharacter);
 
             break;
 
@@ -669,22 +826,22 @@ void tsioImplementation::printfDetail(std::string& dest, const FormatState& stat
     }
 }
 
-void tsioImplementation::skipToFormat(std::string& dest, const char*& format)
+void tsioImplementation::skipToFormat(Format& format)
 {
-    const char* f = format;
+    const char* f = format.format;
     const char* pt0 = f;
 
     while (*f != 0) {
         if (*f == '%') {
             if (f != pt0) {
-                dest.append(pt0, f - pt0);
+                format.dest.append(pt0, f - pt0);
             }
 
             f++;
             pt0 = f;
 
             if (*f != '%') {
-                format = f;
+                format.format = f;
                 return;
             }
         }
@@ -693,10 +850,10 @@ void tsioImplementation::skipToFormat(std::string& dest, const char*& format)
     }
 
     if (f != pt0) {
-        dest.append(pt0, f - pt0);
+        format.dest.append(pt0, f - pt0);
     }
 
-    format = f;
+    format.format = f;
 }
 
 

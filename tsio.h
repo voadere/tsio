@@ -40,13 +40,16 @@
 namespace tsioImplementation
 {
 enum {
-    zerofill = 1,
-    signedNumber = zerofill << 1,
+    numericfill = 1,
+    alfafill = numericfill << 1,
+    signedNumber = numericfill << 1,
     plusIfPositive = signedNumber << 1,
     spaceIfPositive = plusIfPositive << 1,
     leftJustify = spaceIfPositive << 1,
+    centerJustify = leftJustify << 1,
     upcase = leftJustify << 1,
-    alternative = upcase << 1
+    alternative = upcase << 1,
+    nice = alternative << 1
 };
 
 struct FormatState
@@ -63,6 +66,7 @@ struct FormatState
     bool precisionGiven = false;
     bool active = false;
     char formatSpecifier = 0;
+    char fillCharacter = ' ';
 
     mutable char buf[31]; // enough for 5 flags, 2 ints, a dot and a specifier.
 
@@ -87,17 +91,43 @@ struct FormatState
         precisionDynamic = false;
         active = false;
         formatSpecifier = 0;
+        fillCharacter = ' ';
     }
 };
 
-void outputString(std::string& dest, const char* text, size_t size, int minSize, int maxSize, unsigned type);
-
-inline void outputString(std::string& dest, const char* text, int minSize, int maxSize, unsigned type)
+struct Format
 {
-    outputString(dest, text, strlen(text), minSize, maxSize, type);
+    Format(std::string& d, const char* f)
+        : format(f), dest(d)
+    {
+    }
+
+    const char* format;
+    FormatState state;
+    std::string& dest;
+
+    struct StackElement
+    {
+        const char* format;
+        size_t count;
+
+        StackElement(const char* f, size_t c)
+            : format(f), count(c)
+        {
+        }
+
+        std::vector<StackElement> stack;
+    };
+};
+
+void outputString(std::string& dest, const char* text, size_t size, int minSize, int maxSize, unsigned type, char fillCharacter);
+
+inline void outputString(std::string& dest, const char* text, int minSize, int maxSize, unsigned type, char fillCharacter)
+{
+    outputString(dest, text, strlen(text), minSize, maxSize, type, fillCharacter);
 }
 
-void outputNumber(std::string& dest, long long pNumber, int base, int size, int precision, unsigned type);
+void outputNumber(std::string& dest, long long pNumber, int base, int size, int precision, unsigned type, char fillCharacter);
 
 void printfDetail(std::string& dest, const FormatState& state, const std::string& value);
 void printfDetail(std::string& dest, const FormatState& state, const char* value);
@@ -105,7 +135,7 @@ void printfDetail(std::string& dest, const FormatState& state, double value);
 void printfDetail(std::string& dest, const FormatState& state, float value);
 void printfDetail(std::string& dest, const FormatState& state, bool value);
 
-void skipToFormat(std::string& dest, const char*& format);
+void skipToFormat(Format& format);
 
 template <typename T>
 inline void printfDetail(std::string& dest, const FormatState& state, const T& value)
@@ -113,16 +143,18 @@ inline void printfDetail(std::string& dest, const FormatState& state, const T& v
     typename std::make_signed<T>::type sValue = value;
     typename std::make_unsigned<T>::type uValue = value;
     char format = state.formatSpecifier;
+    char fillCharacter = state.fillCharacter;
 
     auto type = state.type;
 
-    if ((type & zerofill) && state.precisionGiven) {
-        type &= ~zerofill;
+    if ((type & numericfill) && state.precisionGiven) {
+        type &= ~numericfill;
+        fillCharacter = ' ';
     }
 
     switch (format) {
         case 'b':
-            outputNumber(dest, uValue, 2, state.width, state.precision, type);
+            outputNumber(dest, uValue, 2, state.width, state.precision, type, fillCharacter);
             break;
 
         case 'c': {
@@ -133,94 +165,24 @@ inline void printfDetail(std::string& dest, const FormatState& state, const T& v
                     state.width,
                     state.precisionGiven ? (state.precision > 0 ? state.precision : 1)
                     : std::numeric_limits<int>::max(),
-                    type);
+                    type,
+                    fillCharacter);
             }
 
             break;
 
-        case 'C':
-            if (type && alternative) {
-                char buf[5];
-                const char* pt;
-                char c = value & 0xff;
+        case 'C': {
+            char c = value & 0xff;
+            outputString(dest,
+                    &c,
+                    1,
+                    state.width,
+                    state.precisionGiven ? (state.precision > 0 ? state.precision : 1)
+                    : std::numeric_limits<int>::max(),
+                    type | nice,
+                    fillCharacter);
 
-                switch (c) {
-                    case '\a':
-                        pt = "\\a";
-                        break;
-
-                    case '\b':
-                        pt = "\\b";
-                        break;
-
-                    case '\f':
-                        pt = "\\f";
-                        break;
-
-                    case '\n':
-                        pt = "\\n";
-                        break;
-
-                    case '\r':
-                        pt = "\\r";
-                        break;
-
-                    case '\t':
-                        pt = "\\t";
-                        break;
-
-                    case '\v':
-                        pt = "\\v";
-                        break;
-
-                    case '\\':
-                        pt = "\\\\";
-                        break;
-
-                    case '\"':
-                        pt = "\\\"";
-                        break;
-
-                    case '\'':
-                        pt = "\\\'";
-                        break;
-
-                    default:
-                        if (c < ' ' || c > '~') {
-                            buf[0] = '\\';
-                            buf[1] = ((c >> 6) & 0x3) + '0';
-                            buf[2] = ((c >> 3) & 0x7) + '0';
-                            buf[3] = ((c     ) & 0x7) + '0';
-                            buf[4] = '\0';
-                        } else {
-                            buf[0] = c;
-                            buf[1] = '\0';
-                        }
-
-                        pt = buf;
-                }
-
-                outputString(dest,
-                        pt,
-                        state.width,
-                        state.precisionGiven ? (state.precision > 0 ? state.precision : 1)
-                        : std::numeric_limits<int>::max(),
-                        type);
-            } else {
-                char c = value & 0xff;
-
-                if (c < ' ' || c > '~') {
-                    c = '.';
-                }
-
-                outputString(dest,
-                        &c,
-                        1,
-                        state.width,
-                        state.precisionGiven ? (state.precision > 0 ? state.precision : 1)
-                        : std::numeric_limits<int>::max(),
-                        type);
-            }
+                  }
 
             break;
 
@@ -232,23 +194,27 @@ inline void printfDetail(std::string& dest, const FormatState& state, const T& v
                     10,
                     state.width,
                     state.precisionGiven ? state.precision : 1,
-                    type | signedNumber);
+                    type | signedNumber,
+                    fillCharacter);
             break;
 
         case 'o':
-            outputNumber(dest, uValue, 8, state.width, state.precisionGiven ? state.precision : 1, type);
+            outputNumber(dest, uValue, 8, state.width, state.precisionGiven ? state.precision : 1, type,
+                    fillCharacter);
 
             break;
 
         case 'u':
             outputNumber(
-                    dest, uValue, 10, state.width, state.precisionGiven ? state.precision : 1, type);
+                    dest, uValue, 10, state.width, state.precisionGiven ? state.precision : 1, type,
+                    fillCharacter);
 
             break;
 
         case 'x':
             outputNumber(
-                    dest, uValue, 16, state.width, state.precisionGiven ? state.precision : 1, type);
+                    dest, uValue, 16, state.width, state.precisionGiven ? state.precision : 1, type,
+                    fillCharacter);
 
             break;
 
@@ -258,7 +224,8 @@ inline void printfDetail(std::string& dest, const FormatState& state, const T& v
                     16,
                     state.width,
                     state.precisionGiven ? state.precision : 1,
-                    type | upcase);
+                    type | upcase,
+                    fillCharacter);
 
             break;
 
@@ -278,7 +245,8 @@ inline void printfDetail(std::string& dest, const FormatState& state, T* value)
 
     switch (format) {
         case 'p':
-            outputNumber(dest, pValue, 16, state.width, state.precision, state.type | alternative);
+            outputNumber(dest, pValue, 16, state.width, state.precision, state.type | alternative,
+                    state.fillCharacter);
 
             break;
 
@@ -302,7 +270,8 @@ inline void printfDetail(std::string& dest, const FormatState& state, const T* v
 
     switch (format) {
         case 'p':
-            outputNumber(dest, pValue, 16, state.width, state.precision, state.type | alternative);
+            outputNumber(dest, pValue, 16, state.width, state.precision, state.type | alternative,
+                state.fillCharacter);
 
             break;
 
@@ -347,11 +316,36 @@ struct ToSpec<T, typename std::enable_if<std::is_integral<T>::value>::type>
 };
 
 template <typename T>
-void printfOne(std::string& dest, const char*& format, FormatState& state, const T& value)
+void printfOne(Format& format, const T& value)
 {
     ToSpec<T> toSpec;
+    FormatState& state = format.state;
+    std::string& dest = format.dest;
+
+    if (state.formatSpecifier == 0) {
+        std::cerr << "Extraneous parameter or missing format specifier." << std::endl;
+        return;
+    }
 
     if (state.active) {
+        if (state.widthDynamic) {
+            int spec = toSpec(value);
+
+            if (spec < 0) {
+                state.width = -spec;
+                state.type |= leftJustify;
+                if (state.type & numericfill) {
+                    state.type &= ~numericfill;
+                    state.fillCharacter = ' ';
+                }
+            } else {
+                state.width = spec;
+            }
+
+            state.widthDynamic = false;
+            return;
+        }
+
         if (state.precisionDynamic) {
             int spec = toSpec(value);
 
@@ -364,52 +358,12 @@ void printfOne(std::string& dest, const char*& format, FormatState& state, const
             state.precisionDynamic = false;
             return;
         }
-    } else {
-        if (*format == 0) {
-            std::cerr << "Extraneous parameter or missing format specifier." << std::endl;
-            return;
-        }
-
-        state.parse(format);
-
-        if (state.position != 0) {
-            std::cerr << "Positional arguments can not be mixed with sequential arguments." << std::endl;
-            return;
-        }
-
-        if (state.active) {
-            if (state.widthDynamic) {
-                int spec = toSpec(value);
-
-                if (spec < 0) {
-                    state.width = -spec;
-                    state.type |= leftJustify;
-                } else {
-                    state.width = spec;
-                }
-
-                state.widthDynamic = false;
-                return;
-            }
-
-            if (state.precisionDynamic) {
-                int spec = toSpec(value);
-
-                if (spec < 0) {
-                    state.precisionGiven = false;
-                } else {
-                    state.precision = spec;
-                }
-
-                state.precisionDynamic = false;
-                return;
-            }
-        }
     }
 
     printfDetail(dest, state, value);
     state.reset();
-    skipToFormat(dest, format);
+    skipToFormat(format);
+    state.parse(format.format);
 }
 
 #if __cplusplus < 201703L
@@ -489,14 +443,15 @@ void readSpecNum(int& dest, FormatState& state, size_t index, const Ts&... ts)
 #endif
 
 template <typename... Ts>
-void printfPositionalOne(std::string& dest, const char*& format, const Ts&... ts)
+void printfPositionalOne(Format& format, const Ts&... ts)
 {
-    if (*format == 0) {
+    std::string& dest = format.dest;
+    FormatState& state = format.state;
+
+    if (state.formatSpecifier == 0) {
         std::cerr << "Extraneous parameter or missing format specifier." << std::endl;
         return;
     }
-
-    FormatState state(format);
 
     if (state.position == 0) {
         std::cerr << "Positional arguments can not be mixed with sequential arguments." << std::endl;
@@ -532,48 +487,48 @@ void printfPositionalOne(std::string& dest, const char*& format, const Ts&... ts
 
     printfNth(dest, state, state.position, ts...);
 
-    skipToFormat(dest, format);
+    skipToFormat(format);
+    state.reset();
+    state.parse(format.format);
+
 }
 
 #if __cplusplus < 201703L
 template <typename T, typename... Ts>
-inline void unpack(std::string& dest, const char*& format, FormatState& state, const T& t, const Ts&... ts)
+inline void unpack(Format& format, const T& t, const Ts&... ts)
 {
-    printfOne(dest, format, state, t);
-    unpack(dest, format, state, ts...);
+    printfOne(format, t);
+    unpack(format, ts...);
 }
 
-inline void unpack(std::string& dest, const char*& format, FormatState& state)
+inline void unpack(Format&)
 {
     // nop
 }
 #endif
 
 template <typename... Ts>
-void addsprintf(std::string& dest, const char* format, const Ts&... ts)
+void addsprintf(std::string& dest, const char* f, const Ts&... ts)
 {
-    skipToFormat(dest, format);
+    Format format(dest, f);
+    FormatState& state = format.state;
 
-    auto pt = format;
+    skipToFormat(format);
+    state.parse(format.format);
 
-    while (*pt >= '0' && *pt <= '9') {
-        pt++;
-    }
-
-    if (*pt == '$') {
+    if (state.position != 0) {
         do {
-            printfPositionalOne(dest, format, ts...);
-        } while (*format != 0);
+            printfPositionalOne(format, ts...);
+        } while (*format.format != 0);
     } else {
-        FormatState state;
 
 #if __cplusplus >= 201703L
-        (printfOne(dest, format, state, ts), ...);
+        (printfOne(format, ts), ...);
 #else
-        unpack(dest, format, state, ts...);
+        unpack(format, ts...);
 #endif
 
-        if (*format != 0) {
+        if (state.formatSpecifier != 0) {
             std::cerr << "Missing parameter or extraneous format specifier." << std::endl;
         }
     }
