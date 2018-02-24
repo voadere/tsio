@@ -326,6 +326,19 @@ void tsioImplementation::outputNumber(std::string& dest,
         if (size > bytesNeeded) {
             dest.append(size - bytesNeeded, (type & alfafill) ? fillCharacter : ' ');
         }
+    } else if (type & centerJustify) {
+        int delta = size - bytesNeeded;
+
+        if (delta / 2 > 0) {
+            dest.append(delta / 2, fillCharacter);
+            delta -= delta / 2;
+        }
+
+        dest.append(bufPointer, bytesNeeded);
+
+        if (delta > 0) {
+            dest.append(delta, fillCharacter);
+        }
     } else if (type & numericfill) {
         auto prefixSize = actualPointer - bufPointer;
 

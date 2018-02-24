@@ -267,6 +267,11 @@ static void extensions()
     text = fstring("array { %10.3f }", a);
     expect("array {     10.110   200.222  3000.333 }", text);
 
+    std::set<int> s = { 1, 100, 1000, 2, 3 };
+
+    text = fstring("set {%5d }", s);
+    expect("set {    1    2    3  100 1000 }", text);
+
     std::array<char,256> a1;
 
     for (int i = 0; i < 256; ++i) {
@@ -313,6 +318,9 @@ static void extensions()
     text = fstring("%^20s", "1234");
     expect("        1234        ", text);
 
+    text = fstring("%^20d", 1234);
+    expect("        1234        ", text);
+
     text = fstring("%^20s", "abc");
     expect("        abc         ", text);
 
@@ -351,6 +359,7 @@ static void extensions()
 
     text = fstring("%5d %2{**%} %s %*{+%} %*d %*{ %d%} %2{!%}", 1, "two", 3, 4, 3, 5, 6, 7);
     expect("    1 **** two +++ 4  5 6 7 !!", text);
+
 }
 
 static void run()
@@ -376,6 +385,19 @@ static void examples()
 {
     std::string text;
 
+    text = fstring("%'*7d', %#'*7x", -23, 0xab);
+    std::cout << text << '\n';
+
+    text = fstring("%\"*7d', %#\"*7x", -23, 0xab);
+    std::cout << text << '\n';
+
+    text = fstring("%\"*20s", "abc");
+    std::cout << text << '\n';
+
+    text = fstring("%*4${!%}",  1, 22, 333, 2);
+    std::cout << text << '\n';
+
+    text = fstring("prefix %4{*%} %3{%3$4d%} %*4${!%}", 1, 22, 333, 2);
     std::cout << text << '\n';
 }
 

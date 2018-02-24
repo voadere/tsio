@@ -36,6 +36,8 @@
 #include <string.h>
 #include <string>
 #include <vector>
+#include <set>
+#include <unordered_set>
 
 namespace tsioImplementation
 {
@@ -47,7 +49,7 @@ enum {
     spaceIfPositive = plusIfPositive << 1,
     leftJustify = spaceIfPositive << 1,
     centerJustify = leftJustify << 1,
-    upcase = leftJustify << 1,
+    upcase = centerJustify << 1,
     alternative = upcase << 1,
     nice = alternative << 1
 };
@@ -318,6 +320,22 @@ inline void printfDetail(std::string& dest, const FormatState& state, const T* v
 }
 
 template <typename T>
+inline void printfDetail(std::string& dest, const FormatState& state, const std::set<T>& value)
+{
+    for (const auto& v : value) {
+        printfDetail(dest, state, v);
+    };
+}
+
+template <typename T>
+inline void printfDetail(std::string& dest, const FormatState& state, const std::unordered_set<T>& value)
+{
+    for (const auto& v : value) {
+        printfDetail(dest, state, v);
+    };
+}
+
+template <typename T>
 inline void printfDetail(std::string& dest, const FormatState& state, const std::vector<T>& value)
 {
     for (const auto& v : value) {
@@ -529,6 +547,10 @@ void printfPositionalOne(Format& format, const Ts&... ts)
             if (spec < 0) {
                 state.width = -spec;
                 state.type |= leftJustify;
+                if (state.type & numericfill) {
+                    state.type &= ~numericfill;
+                    state.fillCharacter = ' ';
+                }
             } else {
                 state.width = spec;
             }
@@ -552,7 +574,6 @@ void printfPositionalOne(Format& format, const Ts&... ts)
     skipToFormat(format);
     state.reset();
     state.parse(format.format);
-
 }
 
 #if __cplusplus < 201703L
@@ -590,9 +611,35 @@ void addsprintf(std::string& dest, const char* f, const Ts&... ts)
         state.parse(format.format);
     }
 
-    if (state.position != 0) {
+    if (state.position != 0 || state.widthPosition != 0 || state.precisionPosition != 0) {
         do {
-            printfPositionalOne(format, ts...);
+            while (state.formatSpecifier == '{') {
+                if (state.widthDynamic) {
+                    int spec = 0;
+
+                    readSpecNum(spec, state, state.widthPosition, ts...);
+
+                    if (spec < 0) {
+                        spec = 0;
+                    }
+
+                    state.width = spec;
+                }
+
+                if (state.width == 0) {
+                    skipAfter(format.format, '{', '}');
+                } else {
+                    format.push(state.width);
+                }
+
+                state.reset();
+                skipToFormat(format);
+                state.parse(format.format);
+            }
+
+            if (state.formatSpecifier != 0) {
+                printfPositionalOne(format, ts...);
+            }
         } while (*format.format != 0);
     } else {
 

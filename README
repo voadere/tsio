@@ -42,6 +42,10 @@ tsio: type safe, printf compatible sprintf and fprintf functions, and an io mani
   'os << tsio::fmt()' can be used to reset all flags that are used in formatting
   to their default values.
 
+  The tsio package implements many extensions to the standard printf format such as
+  new and enhanced format specifiers, centering text, fill characters, formatting
+  vectors, arrays and sets, repeating formats and more.
+  For more information, refer to the documentation in the tsio.odt or tsio.pdf file.
 
 - Example of sprintf:
     using namespace tsio;
