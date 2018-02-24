@@ -102,22 +102,43 @@ struct Format
     {
     }
 
-    const char* format;
-    FormatState state;
-    std::string& dest;
-
     struct StackElement
     {
-        const char* format;
-        size_t count;
-
         StackElement(const char* f, size_t c)
             : format(f), count(c)
         {
         }
 
-        std::vector<StackElement> stack;
+        const char* format;
+        size_t count;
     };
+
+    void push(size_t count)
+    {
+        if (count != 0) {
+            stack.emplace_back(format, count - 1);
+        }
+    }
+
+    bool repeat()
+    {
+        if (!stack.empty()) {
+            if (stack.back().count-- == 0) {
+                stack.pop_back();
+                return false;
+            }
+
+            format = stack.back().format;
+            return true;
+        }
+
+        return false;
+    }
+
+    const char* format;
+    FormatState state;
+    std::string& dest;
+    std::vector<StackElement> stack;
 };
 
 void outputString(std::string& dest, const char* text, size_t size, int minSize, int maxSize, unsigned type, char fillCharacter);
@@ -188,7 +209,6 @@ inline void printfDetail(std::string& dest, const FormatState& state, const T& v
 
         case 'd':
         case 'i':
-        case 's':
             outputNumber(dest,
                     sValue,
                     10,
@@ -196,6 +216,23 @@ inline void printfDetail(std::string& dest, const FormatState& state, const T& v
                     state.precisionGiven ? state.precision : 1,
                     type | signedNumber,
                     fillCharacter);
+            break;
+
+        case 's':
+            if (std::is_signed<T>::value) {
+                outputNumber(dest,
+                        sValue,
+                        10,
+                        state.width,
+                        state.precisionGiven ? state.precision : 1,
+                        type | signedNumber,
+                        fillCharacter);
+            } else {
+                outputNumber(
+                        dest, uValue, 10, state.width, state.precisionGiven ? state.precision : 1, type,
+                        fillCharacter);
+            }
+
             break;
 
         case 'o':
@@ -315,6 +352,8 @@ struct ToSpec<T, typename std::enable_if<std::is_integral<T>::value>::type>
     }
 };
 
+void skipAfter(const char*& format, char startChar, char endChar);
+
 template <typename T>
 void printfOne(Format& format, const T& value)
 {
@@ -356,6 +395,29 @@ void printfOne(Format& format, const T& value)
             }
 
             state.precisionDynamic = false;
+            return;
+        }
+    }
+
+    while (state.formatSpecifier == '{') {
+        if (state.width == 0) {
+            skipAfter(format.format, '{', '}');
+        } else {
+            format.push(state.width);
+        }
+
+        state.reset();
+        skipToFormat(format);
+        state.parse(format.format);
+
+        if (state.formatSpecifier == '{' && state.active) {
+            int spec = toSpec(value);
+
+            if (spec < 0) {
+                spec = 0;
+            }
+
+            state.width = spec;
             return;
         }
     }
@@ -516,6 +578,18 @@ void addsprintf(std::string& dest, const char* f, const Ts&... ts)
     skipToFormat(format);
     state.parse(format.format);
 
+    while (state.formatSpecifier == '{' && !state.active) {
+        if (state.width == 0) {
+            skipAfter(format.format, '{', '}');
+        } else {
+            format.push(state.width);
+        }
+
+        state.reset();
+        skipToFormat(format);
+        state.parse(format.format);
+    }
+
     if (state.position != 0) {
         do {
             printfPositionalOne(format, ts...);
@@ -527,6 +601,22 @@ void addsprintf(std::string& dest, const char* f, const Ts&... ts)
 #else
         unpack(format, ts...);
 #endif
+
+        while (state.formatSpecifier == '{') {
+            if (state.width == 0) {
+                skipAfter(format.format, '{', '}');
+            } else {
+                format.push(state.width);
+            }
+
+            state.reset();
+            skipToFormat(format);
+            state.parse(format.format);
+
+            if (state.formatSpecifier == '{' && state.active) {
+                break;
+            }
+        }
 
         if (state.formatSpecifier != 0) {
             std::cerr << "Missing parameter or extraneous format specifier." << std::endl;

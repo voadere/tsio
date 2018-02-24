@@ -826,6 +826,36 @@ void tsioImplementation::printfDetail(std::string& dest, const FormatState& stat
     }
 }
 
+void tsioImplementation::skipAfter(const char*& format, char startChar, char endChar)
+{
+    const char* f = format;
+    size_t count = 0;
+
+    while (*f != 0) {
+        char ch = *(f++);
+
+        if (ch == '%')  {
+            ch = *(f++);
+
+            while (ch >= '0' && ch <= '9') {
+                ch = *(f++);
+            }
+
+            if (ch == startChar) {
+                count++;
+            } else if (ch == endChar) {
+                if (count-- == 0) {
+                    format = f;
+                    return;
+                }
+            }
+        }
+    }
+
+    std::cerr << "Missing '%" << endChar << "'\n";
+    format = f;
+}
+
 void tsioImplementation::skipToFormat(Format& format)
 {
     const char* f = format.format;
@@ -840,7 +870,14 @@ void tsioImplementation::skipToFormat(Format& format)
             f++;
             pt0 = f;
 
-            if (*f != '%') {
+            if (*f == '}') {
+                if (format.repeat()) {
+                    pt0 = format.format;
+                    f = pt0 - 1;
+                } else {
+                    pt0 = f + 1;
+                }
+            } else if (*f != '%') {
                 format.format = f;
                 return;
             }

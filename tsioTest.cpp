@@ -303,35 +303,54 @@ static void extensions()
             "\\372 \\373 \\374 \\375 \\376 \\377",
         text);
 
-    text = fstring("'%S'", "12\a\b\f34");
-    expect("'12...34'", text);
+    text = fstring("%S", "12\a\b\f34");
+    expect("12...34", text);
 
 
-    text = fstring("'%#S'", "12\a\b\f34");
-    expect("'12\\a\\b\\f34'", text);
+    text = fstring("%#S", "12\a\b\f34");
+    expect("12\\a\\b\\f34", text);
 
-    text = fstring("'%^20s'", "1234");
-    expect("'        1234        '", text);
+    text = fstring("%^20s", "1234");
+    expect("        1234        ", text);
 
-    text = fstring("'%^20s'", "abc");
-    expect("'        abc         '", text);
+    text = fstring("%^20s", "abc");
+    expect("        abc         ", text);
 
-    text = fstring("'%+'*\"@20d'", 123);
-    expect("'+****************123'", text);
+    text = fstring("%+'*\"@20d", 123);
+    expect("+****************123", text);
 
-    text = fstring("'%+\"@20d'", 123);
-    expect("'@@@@@@@@@@@@@@@@+123'", text);
+    text = fstring("%+\"@20d", 123);
+    expect("@@@@@@@@@@@@@@@@+123", text);
 
-    text = fstring("'%^\"*20s'", "abc");
-    expect("'********abc*********'", text);
+    text = fstring("%^\"*20s", "abc");
+    expect("********abc*********", text);
 
     std::string str("This is a std::string");
 
-    text = fstring("'%s %s %s %s %s'", 123, 234.567, true, false, str);
-    expect("'123 234.567 true false This is a std::string'", text);
+    text = fstring("%s %s %s %s %s %s %s", 123, 234.567, true, false, str,
+            0xffffffffu, int(0xffffffff));
+    expect("123 234.567 true false This is a std::string 4294967295 -1", text);
 
-    text = fstring("'%06s %5.2s %10.3s'", 123, 234.567, 98.765);
-    expect("'000123 2.3e+02       98.8'", text);
+    text = fstring("%06s %5.2s %10.3s", 123, 234.567, 98.765);
+    expect("000123 2.3e+02       98.8", text);
+
+    text = fstring("%10{-=%}");
+    expect("-=-=-=-=-=-=-=-=-=-=", text);
+
+    text = fstring("%5{--%3{**%}==%}");
+    expect("--******==--******==--******==--******==--******==", text);
+
+    text = fstring("%*{abc%}", 5);
+    expect("abcabcabcabcabc", text);
+
+    text = fstring("%3{%4d%}", 1, 22, 333);
+    expect("   1  22 333", text);
+
+    text = fstring("%3{%4{*%}%}");
+    expect("************", text);
+
+    text = fstring("%5d %2{**%} %s %*{+%} %*d %*{ %d%} %2{!%}", 1, "two", 3, 4, 3, 5, 6, 7);
+    expect("    1 **** two +++ 4  5 6 7 !!", text);
 }
 
 static void run()
