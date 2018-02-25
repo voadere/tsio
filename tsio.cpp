@@ -96,9 +96,9 @@ void tsioImplementation::outputString(std::string& dest,
                     default:
                         if (c < ' ' || c > '~') {
                             buf[0] = '\\';
-                            buf[1] = ((c >> 6) & 0x3) + '0';
-                            buf[2] = ((c >> 3) & 0x7) + '0';
-                            buf[3] = ((c     ) & 0x7) + '0';
+                            buf[1] = char(((c >> 6) & 0x3) + '0');
+                            buf[2] = char(((c >> 3) & 0x7) + '0');
+                            buf[3] = char(((c     ) & 0x7) + '0');
                             buf[4] = '\0';
                         } else {
                             buf[0] = c;

@@ -210,7 +210,7 @@ inline void printfDetail(std::string& dest, const FormatState& state, const T& v
             break;
 
         case 'C': {
-            char c = value & 0xff;
+            char c = char(value);
             outputString(dest,
                     &c,
                     1,
