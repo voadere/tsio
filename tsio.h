@@ -30,6 +30,9 @@
 #define FORMATTER_H
 
 #include <array>
+#include <deque>
+#include <list>
+#include <forward_list>
 #include <iomanip>
 #include <iostream>
 #include <limits>
@@ -56,17 +59,22 @@ enum {
 
 struct FormatState
 {
+    const char* prefix = nullptr;
+    const char* postfix = nullptr;
     unsigned width = 0;
     unsigned precision = 0;
     unsigned type = 0;
     unsigned position = 0;
     unsigned widthPosition = 0;
     unsigned precisionPosition = 0;
+    unsigned prefixSize = 0;
+    unsigned postfixSize = 0;
     bool widthDynamic = false;
     bool precisionDynamic = false;
     bool widthGiven = false;
     bool precisionGiven = false;
     bool active = false;
+    bool isContainerFormat = false;
     char formatSpecifier = 0;
     char fillCharacter = ' ';
 
@@ -81,16 +89,21 @@ struct FormatState
 
     void reset()
     {
+        prefix = nullptr;
+        postfix = nullptr;
         width = 0;
         precision = 0;
         type = 0;
         position = 0;
         widthPosition = 0;
         precisionPosition = 0;
+        prefixSize = 0;
+        postfixSize = 0;
         widthGiven = false;
         precisionGiven = false;
         widthDynamic = false;
         precisionDynamic = false;
+        isContainerFormat = false;
         active = false;
         formatSpecifier = 0;
         fillCharacter = ' ';
@@ -137,6 +150,10 @@ struct Format
         return false;
     }
 
+    void skipToFormat();
+    void copyToFormat();
+    void parse();
+
     const char* format;
     FormatState state;
     std::string& dest;
@@ -157,8 +174,6 @@ void printfDetail(std::string& dest, const FormatState& state, const char* value
 void printfDetail(std::string& dest, const FormatState& state, double value);
 void printfDetail(std::string& dest, const FormatState& state, float value);
 void printfDetail(std::string& dest, const FormatState& state, bool value);
-
-void skipToFormat(Format& format);
 
 template <typename T>
 inline void printfDetail(std::string& dest, const FormatState& state, const T& value)
@@ -328,7 +343,47 @@ inline void printfDetail(std::string& dest, const FormatState& state, const std:
 }
 
 template <typename T>
+inline void printfDetail(std::string& dest, const FormatState& state, const std::multiset<T>& value)
+{
+    for (const auto& v : value) {
+        printfDetail(dest, state, v);
+    };
+}
+
+template <typename T>
 inline void printfDetail(std::string& dest, const FormatState& state, const std::unordered_set<T>& value)
+{
+    for (const auto& v : value) {
+        printfDetail(dest, state, v);
+    };
+}
+
+template <typename T>
+inline void printfDetail(std::string& dest, const FormatState& state, const std::unordered_multiset<T>& value)
+{
+    for (const auto& v : value) {
+        printfDetail(dest, state, v);
+    };
+}
+
+template <typename T>
+inline void printfDetail(std::string& dest, const FormatState& state, const std::deque<T>& value)
+{
+    for (const auto& v : value) {
+        printfDetail(dest, state, v);
+    };
+}
+
+template <typename T>
+inline void printfDetail(std::string& dest, const FormatState& state, const std::list<T>& value)
+{
+    for (const auto& v : value) {
+        printfDetail(dest, state, v);
+    };
+}
+
+template <typename T>
+inline void printfDetail(std::string& dest, const FormatState& state, const std::forward_list<T>& value)
 {
     for (const auto& v : value) {
         printfDetail(dest, state, v);
@@ -371,6 +426,47 @@ struct ToSpec<T, typename std::enable_if<std::is_integral<T>::value>::type>
 };
 
 void skipAfter(const char*& format, char startChar, char endChar);
+
+template<typename T, typename enable = void>
+struct ContainerDetail
+{
+    void operator()(std::string& dest, FormatState& state, const T& value)
+    {
+        if (state.prefixSize != 0) {
+            dest.append(state.prefix, state.prefixSize);
+        }
+
+        printfDetail(dest, state, value);
+
+        if (state.postfixSize != 0 && !(state.type & alternative)) {
+            dest.append(state.postfix, state.postfixSize);
+        }
+    }
+};
+
+template <typename T>
+struct ContainerDetail<T, typename std::enable_if<std::is_class<T>::value || std::is_array<T>::value>::type>
+{
+    void operator()(std::string& dest, FormatState& state, const T& value)
+    {
+        using std::begin;
+        using std::end;
+
+        for (auto b = begin(value), e = end(value); b != e;) {
+            if (state.prefixSize != 0) {
+                dest.append(state.prefix, state.prefixSize);
+            }
+
+            printfDetail(dest, state, *b);
+
+            ++b;
+
+            if (b != e || (state.postfixSize != 0 && !(state.type & alternative))) {
+                dest.append(state.postfix, state.postfixSize);
+            }
+        }
+    }
+};
 
 template <typename T>
 void printfOne(Format& format, const T& value)
@@ -424,9 +520,7 @@ void printfOne(Format& format, const T& value)
             format.push(state.width);
         }
 
-        state.reset();
-        skipToFormat(format);
-        state.parse(format.format);
+        format.parse();
 
         if (state.formatSpecifier == '{' && state.active) {
             int spec = toSpec(value);
@@ -440,10 +534,15 @@ void printfOne(Format& format, const T& value)
         }
     }
 
-    printfDetail(dest, state, value);
-    state.reset();
-    skipToFormat(format);
-    state.parse(format.format);
+    if (state.isContainerFormat) {
+        ContainerDetail<T> containerDetail;
+
+        containerDetail(dest, state, value);
+    } else {
+        printfDetail(dest, state, value);
+    }
+
+    format.parse();
 }
 
 #if __cplusplus < 201703L
@@ -571,9 +670,7 @@ void printfPositionalOne(Format& format, const Ts&... ts)
 
     printfNth(dest, state, state.position, ts...);
 
-    skipToFormat(format);
-    state.reset();
-    state.parse(format.format);
+    format.parse();
 }
 
 #if __cplusplus < 201703L
@@ -596,8 +693,7 @@ void addsprintf(std::string& dest, const char* f, const Ts&... ts)
     Format format(dest, f);
     FormatState& state = format.state;
 
-    skipToFormat(format);
-    state.parse(format.format);
+    format.parse();
 
     while (state.formatSpecifier == '{' && !state.active) {
         if (state.width == 0) {
@@ -606,9 +702,7 @@ void addsprintf(std::string& dest, const char* f, const Ts&... ts)
             format.push(state.width);
         }
 
-        state.reset();
-        skipToFormat(format);
-        state.parse(format.format);
+        format.parse();
     }
 
     if (state.position != 0 || state.widthPosition != 0 || state.precisionPosition != 0) {
@@ -632,9 +726,7 @@ void addsprintf(std::string& dest, const char* f, const Ts&... ts)
                     format.push(state.width);
                 }
 
-                state.reset();
-                skipToFormat(format);
-                state.parse(format.format);
+                format.parse();
             }
 
             if (state.formatSpecifier != 0) {
@@ -656,9 +748,7 @@ void addsprintf(std::string& dest, const char* f, const Ts&... ts)
                 format.push(state.width);
             }
 
-            state.reset();
-            skipToFormat(format);
-            state.parse(format.format);
+            format.parse();
 
             if (state.formatSpecifier == '{' && state.active) {
                 break;

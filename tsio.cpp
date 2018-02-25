@@ -319,25 +319,26 @@ void tsioImplementation::outputNumber(std::string& dest,
 
     auto bytesNeeded = tmpBuf + tmpBufSize - bufPointer;
     auto actualDigits = tmpBuf + tmpBufSize - actualPointer;
+    char aFill = (type & alfafill) ? fillCharacter : ' ';
 
     if (type & leftJustify) {
         dest.append(bufPointer, bytesNeeded);
 
         if (size > bytesNeeded) {
-            dest.append(size - bytesNeeded, (type & alfafill) ? fillCharacter : ' ');
+            dest.append(size - bytesNeeded, aFill);
         }
     } else if (type & centerJustify) {
         int delta = size - bytesNeeded;
 
         if (delta / 2 > 0) {
-            dest.append(delta / 2, fillCharacter);
+            dest.append(delta / 2, aFill);
             delta -= delta / 2;
         }
 
         dest.append(bufPointer, bytesNeeded);
 
         if (delta > 0) {
-            dest.append(delta, fillCharacter);
+            dest.append(delta, aFill);
         }
     } else if (type & numericfill) {
         auto prefixSize = actualPointer - bufPointer;
@@ -351,7 +352,16 @@ void tsioImplementation::outputNumber(std::string& dest,
         dest.append(actualPointer, actualDigits);
     } else {
         if (size > bytesNeeded) {
-            dest.append(size - bytesNeeded, (type & alfafill) ? fillCharacter : ' ');
+            if (size_t(size) < tmpBufSize) {
+                char* e = bufPointer - (size - bytesNeeded);
+                do {
+                    *(--bufPointer) = aFill;
+                } while (bufPointer != e);
+
+                bytesNeeded = size;
+            } else {
+                dest.append(size - bytesNeeded, aFill);
+            }
         }
 
         dest.append(bufPointer, bytesNeeded);
@@ -588,6 +598,85 @@ const char* tsioImplementation::FormatState::unParse() const
     *(--pt) = '%';
 
     return pt;
+}
+
+void tsioImplementation::Format::copyToFormat()
+{
+    const char* f = format;
+    const char* pt0 = f;
+
+    while (*f != 0) {
+        if (*f == '%') {
+            if (f != pt0) {
+                dest.append(pt0, f - pt0);
+            }
+
+            f++;
+            pt0 = f;
+
+            if (*f == '}') {
+                if (repeat()) {
+                    pt0 = format;
+                    f = pt0 - 1;
+                } else {
+                    pt0 = f + 1;
+                }
+            } else if (*f != '%') {
+                format = f;
+                return;
+            }
+        }
+
+        f++;
+    }
+
+    if (f != pt0) {
+        dest.append(pt0, f - pt0);
+    }
+
+    format = f;
+}
+
+void tsioImplementation::Format::skipToFormat()
+{
+    while (*format != 0) {
+        if (*format == '%') {
+            format++;
+
+            if (*format != '%') {
+                return;
+            }
+        }
+
+        format++;
+    }
+}
+
+void tsioImplementation::Format::parse()
+{
+    state.reset();
+    copyToFormat();
+    state.parse(format);
+
+    if (state.formatSpecifier == '[') {
+        state.prefix = format;
+        skipToFormat();
+        state.prefixSize = unsigned(format - state.prefix - 1);
+
+        state.parse(format);
+
+        state.postfix = format;
+        skipToFormat();
+        state.postfixSize = unsigned(format - state.postfix - 1);
+
+        if (*format != ']') {
+            std::cerr << "Missing '%]'.\n";
+        } else {
+            format++;
+        }
+
+        state.isContainerFormat = true;
+    }
 }
 
 void tsio::fmt::initialize(const char* format)
@@ -868,42 +957,4 @@ void tsioImplementation::skipAfter(const char*& format, char startChar, char end
     std::cerr << "Missing '%" << endChar << "'\n";
     format = f;
 }
-
-void tsioImplementation::skipToFormat(Format& format)
-{
-    const char* f = format.format;
-    const char* pt0 = f;
-
-    while (*f != 0) {
-        if (*f == '%') {
-            if (f != pt0) {
-                format.dest.append(pt0, f - pt0);
-            }
-
-            f++;
-            pt0 = f;
-
-            if (*f == '}') {
-                if (format.repeat()) {
-                    pt0 = format.format;
-                    f = pt0 - 1;
-                } else {
-                    pt0 = f + 1;
-                }
-            } else if (*f != '%') {
-                format.format = f;
-                return;
-            }
-        }
-
-        f++;
-    }
-
-    if (f != pt0) {
-        format.dest.append(pt0, f - pt0);
-    }
-
-    format.format = f;
-}
-
 

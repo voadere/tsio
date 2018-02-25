@@ -360,6 +360,32 @@ static void extensions()
     text = fstring("%5d %2{**%} %s %*{+%} %*d %*{ %d%} %2{!%}", 1, "two", 3, 4, 3, 5, 6, 7);
     expect("    1 **** two +++ 4  5 6 7 !!", text);
 
+    text = fstring("%'*7d', %#'*7x", -23, 0xab);
+    expect("-****23', 0x***ab", text);
+
+    text = fstring("%\"*7d', %#\"*7x", -23, 0xab);
+    expect("****-23', ***0xab", text);
+
+    text = fstring("%\"*20s", "abc");
+    expect("*****************abc", text);
+
+    text = fstring("%*4${!%}",  1, 22, 333, 2);
+    expect("!!", text);
+
+    text = fstring("prefix %4{*%} %3{%3$4d%} %*4${!%}", 1, 22, 333, 2);
+    expect("prefix ****  333 333 333 !!", text);
+
+    std::vector<int> v1 = { 9, 8, 7, 6 };
+    double fa[] = { 1.2, 2.3, 3.4, 4.55555 };
+
+    text = fstring("%[v=%d, %]", v1);
+    expect("v=9, v=8, v=7, v=6, ", text);
+
+    text = fstring("{ %#[v=%d, %] }", v1);
+    expect("{ v=9, v=8, v=7, v=6 }", text);
+
+    text = fstring("{ %#[v=%.2f, %] }", fa);
+    expect("{ v=1.20, v=2.30, v=3.40, v=4.56 }", text);
 }
 
 static void run()
@@ -385,19 +411,6 @@ static void examples()
 {
     std::string text;
 
-    text = fstring("%'*7d', %#'*7x", -23, 0xab);
-    std::cout << text << '\n';
-
-    text = fstring("%\"*7d', %#\"*7x", -23, 0xab);
-    std::cout << text << '\n';
-
-    text = fstring("%\"*20s", "abc");
-    std::cout << text << '\n';
-
-    text = fstring("%*4${!%}",  1, 22, 333, 2);
-    std::cout << text << '\n';
-
-    text = fstring("prefix %4{*%} %3{%3$4d%} %*4${!%}", 1, 22, 333, 2);
     std::cout << text << '\n';
 }
 
