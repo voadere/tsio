@@ -418,7 +418,6 @@ static void test()
 static void examples()
 {
     std::string text;
-    auto t = std::make_tuple(1, 2.3, "four");
 
     std::cout << text << '\n';
 }

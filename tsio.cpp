@@ -29,6 +29,52 @@
 #include "tsio.h"
 #include <time.h>
 
+#if defined(_MSC_VER)
+#define ALWAYS_INLINE __forceinline
+#else
+#define ALWAYS_INLINE __attribute__((always_inline))
+#endif
+
+ALWAYS_INLINE void copy(char* dest, const char* src, unsigned size)
+{
+    switch (size) {
+        case 10:
+            dest[9] = src[9];
+            // Fallthru
+        case 9:
+            dest[8] = src[8];
+            // Fallthru
+        case 8:
+            dest[7] = src[7];
+            // Fallthru
+        case 7:
+            dest[6] = src[6];
+            // Fallthru
+        case 6:
+            dest[5] = src[5];
+            // Fallthru
+        case 5:
+            dest[4] = src[4];
+            // Fallthru
+        case 4:
+            dest[3] = src[3];
+            // Fallthru
+        case 3:
+            dest[2] = src[2];
+            // Fallthru
+        case 2:
+            dest[1] = src[1];
+            // Fallthru
+        case 1:
+            dest[0] = src[0];
+            // Fallthru
+        case 0:
+            return;
+        default:
+            memcpy(dest, src, size);
+    }
+}
+
 void tsioImplementation::outputString(std::string& dest,
                                       const char* text,
                                       size_t s,
@@ -128,36 +174,30 @@ void tsioImplementation::outputString(std::string& dest,
         size = maxSize;
     }
 
-    if (!(type & alfafill)) {
-        fillCharacter = ' ';
-    }
-
-    if (type & leftJustify) {
+    if (minSize <= size) {
         dest.append(text, size);
-        cnt += size;
-
-        if (minSize - cnt > 0) {
-            dest.append(minSize - cnt, fillCharacter);
-        }
-    } else if (type & centerJustify) {
-        int delta = minSize - cnt - size;
-
-        if (delta / 2 > 0) {
-            dest.append(delta / 2, fillCharacter);
-            delta -= delta / 2;
-        }
-
-        dest.append(text, size);
-
-        if (delta > 0) {
-            dest.append(delta, fillCharacter);
-        }
     } else {
-        if (minSize - size > 0) {
-            dest.append(minSize - size, fillCharacter);
+        if (!(type & alfafill)) {
+            fillCharacter = ' ';
         }
 
-        dest.append(text, size);
+        size_t destSize = dest.size();
+
+        dest.append(minSize, fillCharacter);
+
+        char* pt = &dest[destSize];
+
+        if (type & leftJustify) {
+            copy(pt, text, size);
+        } else if (type & centerJustify) {
+            size_t offset = (minSize - cnt - size) / 2;
+
+            copy(pt + offset, text, size);
+        } else {
+            size_t offset = minSize - size;
+
+            copy(pt + offset, text, size);
+        }
     }
 }
 
@@ -318,52 +358,31 @@ void tsioImplementation::outputNumber(std::string& dest,
 
     auto bytesNeeded = tmpBuf + tmpBufSize - bufPointer;
     auto actualDigits = tmpBuf + tmpBufSize - actualPointer;
-    char aFill = (type & alfafill) ? fillCharacter : ' ';
 
-    if (type & leftJustify) {
-        dest.append(bufPointer, bytesNeeded);
-
-        if (size > bytesNeeded) {
-            dest.append(size - bytesNeeded, aFill);
-        }
-    } else if (type & centerJustify) {
-        int delta = size - bytesNeeded;
-
-        if (delta / 2 > 0) {
-            dest.append(delta / 2, aFill);
-            delta -= delta / 2;
-        }
-
-        dest.append(bufPointer, bytesNeeded);
-
-        if (delta > 0) {
-            dest.append(delta, aFill);
-        }
-    } else if (type & numericfill) {
-        auto prefixSize = actualPointer - bufPointer;
-
-        dest.append(bufPointer, prefixSize);
-
-        if (size > bytesNeeded) {
-            dest.append(size - bytesNeeded, fillCharacter);
-        }
-
-        dest.append(actualPointer, actualDigits);
+    if (size <= bytesNeeded) {
+            dest.append(bufPointer, bytesNeeded);
     } else {
-        if (size > bytesNeeded) {
-            if (size_t(size) < tmpBufSize) {
-                char* e = bufPointer - (size - bytesNeeded);
-                do {
-                    *(--bufPointer) = aFill;
-                } while (bufPointer != e);
+        char fill = (type & (alfafill | numericfill)) ? fillCharacter : ' ';
+        size_t destSize = dest.size();
 
-                bytesNeeded = size;
-            } else {
-                dest.append(size - bytesNeeded, aFill);
-            }
+        dest.append(size, fill);
+
+        char* pt = &dest[destSize];
+
+        if (type & leftJustify) {
+            copy(pt, bufPointer, bytesNeeded);
+        } else if (type & centerJustify) {
+            size_t offset = (size - bytesNeeded) / 2;
+
+            copy(pt + offset, bufPointer, bytesNeeded);
+        } else if (type & numericfill) {
+            auto prefixSize = actualPointer - bufPointer;
+
+            copy(pt, bufPointer, prefixSize);
+            copy(pt + size - actualDigits, actualPointer, actualDigits);
+        } else {
+            copy( pt + size - bytesNeeded, bufPointer, bytesNeeded);
         }
-
-        dest.append(bufPointer, bytesNeeded);
     }
 }
 
