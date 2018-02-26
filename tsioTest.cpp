@@ -383,6 +383,17 @@ static void extensions()
 
     text = fstring("{ %#[v=%.2f, %] }", fa);
     expect("{ v=1.20, v=2.30, v=3.40, v=4.56 }", text);
+
+    auto t = std::make_tuple(1, 2.3, "four");
+
+    text = fstring("%5s", t);
+    expect("    1  2.3 four", text);
+
+    text = fstring("%[v=%s, %]", t);
+    expect("v=1, v=2.3, v=four, ", text);
+
+    text = fstring("{ %#[v=%s, %] }", t);
+    expect("{ v=1, v=2.30000, v=four }", text);
 }
 
 static void run()
@@ -407,6 +418,7 @@ static void test()
 static void examples()
 {
     std::string text;
+    auto t = std::make_tuple(1, 2.3, "four");
 
     std::cout << text << '\n';
 }

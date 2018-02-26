@@ -448,6 +448,25 @@ inline void printfDetail(std::string& dest, const FormatState& state, const std:
     };
 }
 
+template<std::size_t I = 0, typename... Tp>
+inline typename std::enable_if<I == sizeof...(Tp), void>::type
+tupleDetail(std::string& dest, FormatState& state, const std::tuple<Tp...>& t)
+{ }
+
+template<std::size_t I = 0, typename... Tp>
+inline typename std::enable_if<I < sizeof...(Tp), void>::type
+tupleDetail(std::string& dest, FormatState& state, const std::tuple<Tp...>& t)
+{
+    printfDetail(dest, state, std::get<I>(t));
+    tupleDetail<I + 1, Tp...>(dest, state, t);
+}
+
+template <typename... Ts>
+inline void printfDetail(std::string& dest, FormatState& state, const std::tuple<Ts...>& value)
+{
+    tupleDetail(dest, state, value);
+}
+
 template <typename T, typename enable = void>
 struct ToSpec
 {
@@ -470,7 +489,11 @@ struct ToSpec<T, typename std::enable_if<std::is_integral<T>::value>::type>
 void skipAfter(const char*& format, char startChar, char endChar);
 
 template <typename T, typename enable = void>
-struct ContainerDetail
+struct ContainerDetail;
+
+
+template <typename T>
+struct ContainerDetail<T, typename std::enable_if<!std::is_class<T>::value && !std::is_array<T>::value>::type>
 {
     void operator()(std::string& dest, FormatState& state, const T& value)
     {
@@ -509,6 +532,41 @@ struct ContainerDetail<T, typename std::enable_if<std::is_class<T>::value || std
         }
     }
 };
+
+template <typename T>
+void containerDetail(std::string& dest, FormatState& state, const T& value)
+{
+    ContainerDetail<T> c;
+
+    c(dest, state, value);
+}
+
+template<std::size_t I = 0, typename... Tp>
+inline typename std::enable_if<I == sizeof...(Tp), void>::type
+tupleContainerDetail(std::string& dest, FormatState& state, const std::tuple<Tp...>& t)
+{ }
+
+template<std::size_t I = 0, typename... Tp>
+inline typename std::enable_if<I < sizeof...(Tp), void>::type
+tupleContainerDetail(std::string& dest, FormatState& state, const std::tuple<Tp...>& t)
+{
+    if (state.prefixSize != 0) {
+        dest.append(state.prefix, state.prefixSize);
+    }
+
+    printfDetail(dest, state, std::get<I>(t));
+    if (I != sizeof...(Tp) - 1 || (state.postfixSize != 0 && !(state.type & alternative))) {
+        dest.append(state.postfix, state.postfixSize);
+    }
+
+    tupleContainerDetail<I + 1, Tp...>(dest, state, t);
+}
+
+template <typename... Ts>
+void containerDetail(std::string& dest, FormatState& state, const std::tuple<Ts...>& value)
+{
+    tupleContainerDetail(dest, state, value);
+}
 
 template <typename T>
 void printfOne(Format& format, const T& value)
@@ -577,8 +635,6 @@ void printfOne(Format& format, const T& value)
     }
 
     if (state.isContainerFormat) {
-        ContainerDetail<T> containerDetail;
-
         containerDetail(dest, state, value);
     } else {
         printfDetail(dest, state, value);
