@@ -683,12 +683,12 @@ void tsioImplementation::Format::parse()
 
         state.parse(format);
 
-        state.postfix = format;
+        state.suffix = format;
         skipToFormat();
-        state.postfixSize = unsigned(format - state.postfix - 1);
+        state.postfixSize = unsigned(format - state.suffix - 1);
 
         if (*format != ']') {
-            std::cerr << "Missing '%]'.\n";
+            std::cerr << "TSIO: Missing '%]'.\n";
         } else {
             format++;
         }
@@ -837,7 +837,7 @@ void tsioImplementation::printfDetail(std::string& dest, const FormatState& stat
             break;
 
         default:
-            std::cerr << "Invalid format '" << format << "' for std::string value" << std::endl;
+            std::cerr << "TSIO: Invalid format '" << format << "' for std::string value" << std::endl;
     }
 }
 
@@ -929,7 +929,7 @@ void tsioImplementation::printfDetail(std::string& dest, const FormatState& stat
         break;
 
         default:
-            std::cerr << "Invalid format '" << format << "' for floating point value" << std::endl;
+            std::cerr << "TSIO: Invalid format '" << format << "' for floating point value" << std::endl;
     }
 }
 
@@ -977,6 +977,6 @@ void tsioImplementation::skipAfter(const char*& format, char startChar, char end
         }
     }
 
-    std::cerr << "Missing '%" << endChar << "'\n";
+    std::cerr << "TSIO: Missing '%" << endChar << "'\n";
     format = f;
 }

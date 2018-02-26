@@ -60,7 +60,7 @@ enum {
 struct FormatState
 {
     const char* prefix = nullptr;
-    const char* postfix = nullptr;
+    const char* suffix = nullptr;
     unsigned width = 0;
     unsigned precision = 0;
     unsigned type = 0;
@@ -90,7 +90,7 @@ struct FormatState
     void reset()
     {
         prefix = nullptr;
-        postfix = nullptr;
+        suffix = nullptr;
         width = 0;
         precision = 0;
         type = 0;
@@ -316,10 +316,10 @@ inline void printfDetail(std::string& dest, const FormatState& state, const T& v
             break;
 
         case 'n':
-            std::cerr << "Did you forget to specify the parameter for '%n' by pointer?" << std::endl;
+            std::cerr << "TSIO: Did you forget to specify the parameter for '%n' by pointer?" << std::endl;
 
         default:
-            std::cerr << "Invalid format '" << format << "' for integeral value" << std::endl;
+            std::cerr << "TSIO: Invalid format '" << format << "' for integeral value" << std::endl;
     }
 }
 
@@ -472,7 +472,7 @@ struct ToSpec
 {
     int operator()(const T&)
     {
-        std::cerr << "invalid conversion" << std::endl;
+        std::cerr << "TSIO: invalid conversion" << std::endl;
         return 0;
     }
 };
@@ -504,7 +504,7 @@ struct ContainerDetail<T, typename std::enable_if<!std::is_class<T>::value && !s
         printfDetail(dest, state, value);
 
         if (state.postfixSize != 0 && !(state.type & alternative)) {
-            dest.append(state.postfix, state.postfixSize);
+            dest.append(state.suffix, state.postfixSize);
         }
     }
 };
@@ -527,7 +527,7 @@ struct ContainerDetail<T, typename std::enable_if<std::is_class<T>::value || std
             ++b;
 
             if (b != e || (state.postfixSize != 0 && !(state.type & alternative))) {
-                dest.append(state.postfix, state.postfixSize);
+                dest.append(state.suffix, state.postfixSize);
             }
         }
     }
@@ -556,7 +556,7 @@ tupleContainerDetail(std::string& dest, FormatState& state, const std::tuple<Tp.
 
     printfDetail(dest, state, std::get<I>(t));
     if (I != sizeof...(Tp) - 1 || (state.postfixSize != 0 && !(state.type & alternative))) {
-        dest.append(state.postfix, state.postfixSize);
+        dest.append(state.suffix, state.postfixSize);
     }
 
     tupleContainerDetail<I + 1, Tp...>(dest, state, t);
@@ -576,7 +576,7 @@ void printfOne(Format& format, const T& value)
     std::string& dest = format.dest;
 
     if (state.formatSpecifier == 0) {
-        std::cerr << "Extraneous parameter or missing format specifier." << std::endl;
+        std::cerr << "TSIO: Extraneous parameter or missing format specifier." << std::endl;
         return;
     }
 
@@ -646,7 +646,7 @@ void printfOne(Format& format, const T& value)
 #if __cplusplus < 201703L
 inline void printfNth(std::string&, FormatState&, size_t)
 {
-    std::cerr << "Invalid position in format." << std::endl;
+    std::cerr << "TSIO: Invalid position in format." << std::endl;
 }
 
 template <typename T, typename... Ts>
@@ -660,7 +660,7 @@ void printfNth(std::string& dest, FormatState& state, size_t index, const T& t, 
 }
 inline void readSpecNum(int& dest, FormatState&, size_t)
 {
-    std::cerr << "Invalid position in format." << std::endl;
+    std::cerr << "TSIO: Invalid position in format." << std::endl;
     dest = 0;
 }
 
@@ -726,12 +726,12 @@ void printfPositionalOne(Format& format, const Ts&... ts)
     FormatState& state = format.state;
 
     if (state.formatSpecifier == 0) {
-        std::cerr << "Extraneous parameter or missing format specifier." << std::endl;
+        std::cerr << "TSIO: Extraneous parameter or missing format specifier." << std::endl;
         return;
     }
 
     if (state.position == 0) {
-        std::cerr << "Positional arguments can not be mixed with sequential arguments." << std::endl;
+        std::cerr << "TSIO: Positional arguments can not be mixed with sequential arguments." << std::endl;
         return;
     }
 
@@ -854,7 +854,7 @@ void addsprintf(std::string& dest, const char* f, const Ts&... ts)
         }
 
         if (state.formatSpecifier != 0) {
-            std::cerr << "Missing parameter or extraneous format specifier." << std::endl;
+            std::cerr << "TSIO: Missing parameter or extraneous format specifier." << std::endl;
         }
     }
 }
