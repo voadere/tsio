@@ -26,7 +26,7 @@ if DEBUG == '1':
     gcc.Append(CCFLAGS=' -g')
     clang.Append(CCFLAGS=' -g')
 else:
-    gcc.Append(CCFLAGS=' -O3 -fomit-frame-pointer -Wall -Wmissing-declarations -Wsign-compare -Wconversion -Wno-sign-conversion -Wold-style-cast -Wno-parentheses')
+    gcc.Append(CCFLAGS=' -O3 -fomit-frame-pointer -Wall -Wmissing-declarations -Wsign-compare -Wconversion -Wno-sign-conversion -Wold-style-cast -Wno-parentheses -Wno-attributes')
     clang.Append(CCFLAGS=' -O3 -fomit-frame-pointer -Wall -Wmissing-declarations -Wsign-compare -Wconversion -Wno-sign-conversion -Wold-style-cast -Wno-parentheses -Wno-missing-braces')
 
 

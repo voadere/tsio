@@ -35,7 +35,7 @@
 #define ALWAYS_INLINE __attribute__((always_inline))
 #endif
 
-ALWAYS_INLINE void copy(char* dest, const char* src, unsigned size)
+static ALWAYS_INLINE void copy(char* dest, const char* src, unsigned size)
 {
     switch (size) {
         case 10:
@@ -72,6 +72,53 @@ ALWAYS_INLINE void copy(char* dest, const char* src, unsigned size)
             return;
         default:
             memcpy(dest, src, size);
+    }
+}
+
+static ALWAYS_INLINE void smallCopy(char* dest, const char* src, unsigned size)
+{
+    for (unsigned i = 0; i < size; ++i) {
+        *(dest++) = *(src++);
+    }
+}
+
+static ALWAYS_INLINE void fill(char* dest, char c, unsigned size)
+{
+    switch (size) {
+        case 10:
+            dest[9] = c;
+            // Fallthru
+        case 9:
+            dest[8] = c;
+            // Fallthru
+        case 8:
+            dest[7] = c;
+            // Fallthru
+        case 7:
+            dest[6] = c;
+            // Fallthru
+        case 6:
+            dest[5] = c;
+            // Fallthru
+        case 5:
+            dest[4] = c;
+            // Fallthru
+        case 4:
+            dest[3] = c;
+            // Fallthru
+        case 3:
+            dest[2] = c;
+            // Fallthru
+        case 2:
+            dest[1] = c;
+            // Fallthru
+        case 1:
+            dest[0] = c;
+            // Fallthru
+        case 0:
+            return;
+        default:
+            memset(dest, c, size);
     }
 }
 
@@ -209,34 +256,34 @@ void tsioImplementation::outputNumber(std::string& dest,
                                       unsigned type,
                                       char fillCharacter)
 {
-    if (precision < 0) {
-        precision = 0;
-    }
-
-    char sign = 0;
     unsigned long long number;
-    const size_t tmpBufSize = 134; // allow for 128 binary digits plus radix indicator and sign
-    char tmpBuf[tmpBufSize];
+    const size_t bufSize = 134; // allow for 128 binary digits plus radix indicator and sign
+    char buf[bufSize * 2];
+    char prefix[4];
+    size_t prefixSize = 0;
     const char* digitPairs = "0001020304050607080910111213141516171819"
                              "2021222324252627282930313233343536373839"
                              "4041424344454647484950515253545556575859"
                              "6061626364656667686970717273747576777879"
                              "8081828384858687888990919293949596979899";
 
-    char* bufPointer = tmpBuf + tmpBufSize;
-    char* actualPointer = bufPointer;
-    char* precisionPointer = bufPointer - precision;
+    if (precision < 0) {
+        precision = 0;
+    }
+
+    char* actualPointer = buf + bufSize;
+    char* precisionPointer = actualPointer - precision;
 
     number = pNumber;
 
     if (type & signedNumber) {
         if (pNumber < 0) {
-            sign = '-';
+            prefix[prefixSize++] = '-';
             number = -pNumber;
         } else if (type & plusIfPositive) {
-            sign = '+';
+            prefix[prefixSize++] = '+';
         } else if (type & spaceIfPositive) {
-            sign = ' ';
+            prefix[prefixSize++] = ' ';
         }
     }
 
@@ -244,38 +291,34 @@ void tsioImplementation::outputNumber(std::string& dest,
         switch (base) {
             case 2:
                 do {
-                    *(--bufPointer) = char((number & 1) + '0');
+                    *(--actualPointer) = char((number & 1) + '0');
                     number >>= 1;
                 } while (number != 0);
 
-                while (bufPointer > precisionPointer) {
-                    *(--bufPointer) = '0';
+                while (actualPointer > precisionPointer) {
+                    *(--actualPointer) = '0';
                 }
 
-                actualPointer = bufPointer;
-
                 if (type & alternative && pNumber != 0) {
-                    *(--bufPointer) = (type & upcase) ? 'B' : 'b';
-                    *(--bufPointer) = '0';
+                    prefix[prefixSize++] = '0';
+                    prefix[prefixSize++] = (type & upcase) ? 'B' : 'b';
                 }
 
                 break;
 
             case 8:
                 do {
-                    *(--bufPointer) = char((number & 7) + '0');
+                    *(--actualPointer) = char((number & 7) + '0');
                     number >>= 3;
                 } while (number != 0);
 
-                while (bufPointer > precisionPointer) {
-                    *(--bufPointer) = '0';
+                while (actualPointer > precisionPointer) {
+                    *(--actualPointer) = '0';
                 }
 
-                actualPointer = bufPointer;
-
                 if (type & alternative) {
-                    if (*bufPointer != '0') {
-                        *(--bufPointer) = '0';
+                    if (*actualPointer != '0') {
+                        prefix[prefixSize++] = '0';
                     }
                 }
 
@@ -287,19 +330,17 @@ void tsioImplementation::outputNumber(std::string& dest,
                 const char* digits = (type & upcase) ? upDigits : lowDigits;
 
                 do {
-                    *(--bufPointer) = digits[number & 15];
+                    *(--actualPointer) = digits[number & 15];
                     number >>= 4;
                 } while (number != 0);
 
-                while (bufPointer > precisionPointer) {
-                    *(--bufPointer) = '0';
+                while (actualPointer > precisionPointer) {
+                    *(--actualPointer) = '0';
                 }
 
-                actualPointer = bufPointer;
-
                 if (type & alternative && pNumber != 0) {
-                    *(--bufPointer) = (type & upcase) ? 'X' : 'x';
-                    *(--bufPointer) = '0';
+                    prefix[prefixSize++] = '0';
+                    prefix[prefixSize++] = (type & upcase) ? 'X' : 'x';
                 }
             }
 
@@ -310,8 +351,8 @@ void tsioImplementation::outputNumber(std::string& dest,
                     unsigned long long q = number / 100;
                     unsigned long long r = (number % 100) * 2;
 
-                    *(--bufPointer) = digitPairs[r + 1];
-                    *(--bufPointer) = digitPairs[r];
+                    *(--actualPointer) = digitPairs[r + 1];
+                    *(--actualPointer) = digitPairs[r];
 
                     number = q;
                 }
@@ -322,8 +363,8 @@ void tsioImplementation::outputNumber(std::string& dest,
                     unsigned q = uNumber / 100;
                     unsigned r = (uNumber % 100) * 2;
 
-                    *(--bufPointer) = digitPairs[r + 1];
-                    *(--bufPointer) = digitPairs[r];
+                    *(--actualPointer) = digitPairs[r + 1];
+                    *(--actualPointer) = digitPairs[r];
 
                     uNumber = q;
                 }
@@ -331,57 +372,86 @@ void tsioImplementation::outputNumber(std::string& dest,
                 if (uNumber >= 10) {
                     unsigned long long r = uNumber * 2;
 
-                    *(--bufPointer) = digitPairs[r + 1];
-                    *(--bufPointer) = digitPairs[r];
+                    *(--actualPointer) = digitPairs[r + 1];
+                    *(--actualPointer) = digitPairs[r];
                 } else {
-                    *(--bufPointer) = char(uNumber + '0');
+                    *(--actualPointer) = char(uNumber + '0');
                 }
 
-                while (bufPointer > precisionPointer) {
-                    *(--bufPointer) = '0';
+                while (actualPointer > precisionPointer) {
+                    *(--actualPointer) = '0';
                 }
-
-                actualPointer = bufPointer;
 
                 break;
         }
     } else {
         /// This is a hack to overcome an inconsistency between '%.x' and '%.o' formatting.
         if (base == 8 && (type & alternative)) {
-            *(--bufPointer) = '0';
+            prefix[prefixSize++] = '0';
         }
     }
 
-    if (sign != 0) {
-        *(--bufPointer) = sign;
-    }
+    auto actualDigits = buf + bufSize - actualPointer;
+    auto bytesNeeded = actualDigits + prefixSize;
 
-    auto bytesNeeded = tmpBuf + tmpBufSize - bufPointer;
-    auto actualDigits = tmpBuf + tmpBufSize - actualPointer;
+    if (size_t(size) <= bytesNeeded) {
+        if (prefixSize != 0) {
+            dest.append(prefix, prefixSize);
+        }
 
-    if (size <= bytesNeeded) {
-            dest.append(bufPointer, bytesNeeded);
+        dest.append(actualPointer, actualDigits);
     } else {
-        char fill = (type & (alfafill | numericfill)) ? fillCharacter : ' ';
-        size_t destSize = dest.size();
+        char fillChar = (type & (alfafill | numericfill)) ? fillCharacter : ' ';
+        if (bytesNeeded < bufSize) {
+            char* pt;
 
-        dest.append(size, fill);
+            if (type & leftJustify) {
+                pt = actualPointer - prefixSize;
 
-        char* pt = &dest[destSize];
+                smallCopy(pt, prefix, prefixSize);
+                fill(buf + bufSize, fillChar, size - bytesNeeded);
+            } else if (type & centerJustify) {
+                size_t offset = (size - bytesNeeded) / 2;
+                pt = actualPointer - prefixSize - offset;
 
-        if (type & leftJustify) {
-            copy(pt, bufPointer, bytesNeeded);
-        } else if (type & centerJustify) {
-            size_t offset = (size - bytesNeeded) / 2;
+                smallCopy(actualPointer - prefixSize, prefix, prefixSize);
+                fill(pt, fillChar, offset);
+                fill(buf + bufSize, fillChar, (size - bytesNeeded) - offset);
+            } else if (type & numericfill) {
+                pt = buf + bufSize - size;
 
-            copy(pt + offset, bufPointer, bytesNeeded);
-        } else if (type & numericfill) {
-            auto prefixSize = actualPointer - bufPointer;
+                smallCopy(pt, prefix, prefixSize);
+                fill(pt + prefixSize, fillChar, size - bytesNeeded);
+            } else {
+                pt = buf + bufSize - size;
 
-            copy(pt, bufPointer, prefixSize);
-            copy(pt + size - actualDigits, actualPointer, actualDigits);
+                smallCopy(actualPointer - prefixSize, prefix, prefixSize);
+                fill(pt, fillChar, size - bytesNeeded);
+            }
+
+            dest.append(pt, size);
         } else {
-            copy( pt + size - bytesNeeded, bufPointer, bytesNeeded);
+            size_t destSize = dest.size();
+
+            dest.append(size, fillChar);
+
+            char* pt = &dest[destSize];
+
+            if (type & leftJustify) {
+                smallCopy(pt, prefix, prefixSize);
+                copy(pt + prefixSize, actualPointer, actualDigits);
+            } else if (type & centerJustify) {
+                size_t offset = (size - bytesNeeded) / 2;
+
+                smallCopy(pt + prefixSize, prefix, prefixSize);
+                copy(pt + offset + prefixSize, actualPointer, bytesNeeded);
+            } else if (type & numericfill) {
+                smallCopy(pt, prefix, prefixSize);
+                copy(pt + size - actualDigits, actualPointer, actualDigits);
+            } else {
+                smallCopy( pt + size - bytesNeeded, prefix, prefixSize);
+                copy( pt + size - actualDigits, actualPointer, actualDigits);
+            }
         }
     }
 }
@@ -389,6 +459,45 @@ void tsioImplementation::outputNumber(std::string& dest,
 tsioImplementation::FormatState::FormatState(const char*& format)
 {
     parse(format);
+}
+
+static bool isValidFormatSpecifier(unsigned c)
+{
+    switch(c) {
+        case '(':
+        case ')':
+        case '<':
+        case '>':
+        case 'A':
+        case 'B':
+        case 'C':
+        case 'E':
+        case 'F':
+        case 'G':
+        case 'S':
+        case 'X':
+        case '[':
+        case ']':
+        case 'a':
+        case 'b':
+        case 'c':
+        case 'd':
+        case 'e':
+        case 'f':
+        case 'g':
+        case 'i':
+        case 'n':
+        case 'o':
+        case 'p':
+        case 's':
+        case 'u':
+        case 'x':
+        case '{':
+        case '}':
+            return true;
+    }
+
+    return false;
 }
 
 void tsioImplementation::FormatState::parse(const char*& f)
@@ -416,6 +525,12 @@ void tsioImplementation::FormatState::parse(const char*& f)
             format = pt;
             ch = *(format++);
         }
+    }
+
+    if (isValidFormatSpecifier(ch)) {
+        formatSpecifier = ch;
+        f = format;
+        return;
     }
 
     if (!widthGiven) {
@@ -809,11 +924,13 @@ std::ostream& tsio::fmt::operator()(std::ostream& out) const
     return out;
 }
 
-void tsioImplementation::printfDetail(std::string& dest, const FormatState& state, const std::string& value)
+void tsioImplementation::printfDetail(Format& format, const std::string& value)
 {
-    char format = state.formatSpecifier;
+    FormatState& state = format.state;
+    std::string& dest = format.dest;
+    char spec = state.formatSpecifier;
 
-    switch (format) {
+    switch (spec) {
         case 's':
             outputString(dest,
                          value.c_str(),
@@ -837,16 +954,18 @@ void tsioImplementation::printfDetail(std::string& dest, const FormatState& stat
             break;
 
         default:
-            std::cerr << "TSIO: Invalid format '" << format << "' for std::string value" << std::endl;
+            std::cerr << "TSIO: Invalid format '" << spec << "' for std::string value" << std::endl;
     }
 }
 
-void tsioImplementation::printfDetail(std::string& dest, const FormatState& state, const char* value)
+void tsioImplementation::printfDetail(Format& format, const char* value)
 {
-    char format = state.formatSpecifier;
+    FormatState& state = format.state;
+    std::string& dest = format.dest;
+    char spec = state.formatSpecifier;
     uintptr_t pValue = uintptr_t(value);
 
-    switch (format) {
+    switch (spec) {
         case 'p':
             outputNumber(dest,
                          pValue,
@@ -879,15 +998,17 @@ void tsioImplementation::printfDetail(std::string& dest, const FormatState& stat
             break;
 
         default:
-            printfDetail(dest, state, static_cast<uintptr_t>(pValue));
+            printfDetail(format, static_cast<uintptr_t>(pValue));
     }
 }
 
-void tsioImplementation::printfDetail(std::string& dest, const FormatState& state, double value)
+void tsioImplementation::printfDetail(Format& format, double value)
 {
-    char format = state.formatSpecifier;
+    FormatState& state = format.state;
+    std::string& dest = format.dest;
+    char spec = state.formatSpecifier;
 
-    switch (format) {
+    switch (spec) {
         case 's':
         case 'a':
         case 'A':
@@ -899,7 +1020,7 @@ void tsioImplementation::printfDetail(std::string& dest, const FormatState& stat
         case 'G': {
             const char* f;
 
-            if (format == 's') {
+            if (spec == 's') {
                 FormatState newFlags(state);
 
                 newFlags.formatSpecifier = 'g';
@@ -929,25 +1050,25 @@ void tsioImplementation::printfDetail(std::string& dest, const FormatState& stat
         break;
 
         default:
-            std::cerr << "TSIO: Invalid format '" << format << "' for floating point value" << std::endl;
+            std::cerr << "TSIO: Invalid format '" << spec << "' for floating point value" << std::endl;
     }
 }
 
-void tsioImplementation::printfDetail(std::string& dest, const FormatState& state, float value)
+void tsioImplementation::printfDetail(Format& format, float value)
 {
-    printfDetail(dest, state, double(value));
+    printfDetail(format, double(value));
 }
 
-void tsioImplementation::printfDetail(std::string& dest, const FormatState& state, bool value)
+void tsioImplementation::printfDetail(Format& format, bool value)
 {
-    char format = state.formatSpecifier;
+    char spec = format.state.formatSpecifier;
 
-    if (format == 's') {
+    if (spec == 's') {
         const char* pt = value ? "true" : "false";
 
-        printfDetail(dest, state, pt);
+        printfDetail(format, pt);
     } else {
-        printfDetail(dest, state, static_cast<long long>(value));
+        printfDetail(format, static_cast<long long>(value));
     }
 }
 

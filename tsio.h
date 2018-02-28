@@ -59,24 +59,24 @@ enum {
 
 struct FormatState
 {
-    const char* prefix = nullptr;
-    const char* suffix = nullptr;
-    unsigned width = 0;
-    unsigned precision = 0;
-    unsigned type = 0;
-    unsigned position = 0;
-    unsigned widthPosition = 0;
-    unsigned precisionPosition = 0;
-    unsigned prefixSize = 0;
-    unsigned postfixSize = 0;
-    bool widthDynamic = false;
-    bool precisionDynamic = false;
-    bool widthGiven = false;
-    bool precisionGiven = false;
-    bool active = false;
-    bool isContainerFormat = false;
-    char formatSpecifier = 0;
-    char fillCharacter = ' ';
+    const char* prefix;
+    const char* suffix;
+    unsigned width;
+    unsigned precision;
+    unsigned type;
+    unsigned position;
+    unsigned widthPosition;
+    unsigned precisionPosition;
+    unsigned prefixSize;
+    unsigned postfixSize;
+    bool widthDynamic;
+    bool precisionDynamic;
+    bool widthGiven;
+    bool precisionGiven;
+    bool active;
+    bool isContainerFormat;
+    char formatSpecifier;
+    char fillCharacter;
 
     mutable char buf[31]; // enough for 5 flags, 2 ints, a dot and a specifier.
 
@@ -184,18 +184,20 @@ void outputNumber(std::string& dest,
                   unsigned type,
                   char fillCharacter);
 
-void printfDetail(std::string& dest, const FormatState& state, const std::string& value);
-void printfDetail(std::string& dest, const FormatState& state, const char* value);
-void printfDetail(std::string& dest, const FormatState& state, double value);
-void printfDetail(std::string& dest, const FormatState& state, float value);
-void printfDetail(std::string& dest, const FormatState& state, bool value);
+void printfDetail(Format& format, const std::string& value);
+void printfDetail(Format& format, const char* value);
+void printfDetail(Format& format, double value);
+void printfDetail(Format& format, float value);
+void printfDetail(Format& format, bool value);
 
 template <typename T>
-inline void printfDetail(std::string& dest, const FormatState& state, const T& value)
+inline void printfDetail(Format& format, const T& value)
 {
+    FormatState& state = format.state;
+    std::string& dest = format.dest;
     typename std::make_signed<T>::type sValue = value;
     typename std::make_unsigned<T>::type uValue = value;
-    char format = state.formatSpecifier;
+    char spec = state.formatSpecifier;
     char fillCharacter = state.fillCharacter;
 
     auto type = state.type;
@@ -205,7 +207,7 @@ inline void printfDetail(std::string& dest, const FormatState& state, const T& v
         fillCharacter = ' ';
     }
 
-    switch (format) {
+    switch (spec) {
         case 'b':
             outputNumber(dest, uValue, 2, state.width, state.precision, type, fillCharacter);
             break;
@@ -319,17 +321,19 @@ inline void printfDetail(std::string& dest, const FormatState& state, const T& v
             std::cerr << "TSIO: Did you forget to specify the parameter for '%n' by pointer?" << std::endl;
 
         default:
-            std::cerr << "TSIO: Invalid format '" << format << "' for integeral value" << std::endl;
+            std::cerr << "TSIO: Invalid format '" << spec << "' for integeral value" << std::endl;
     }
 }
 
 template <typename T>
-inline void printfDetail(std::string& dest, const FormatState& state, T* value)
+inline void printfDetail(Format& format, T* value)
 {
-    char format = state.formatSpecifier;
+    FormatState& state = format.state;
+    std::string& dest = format.dest;
+    char spec = state.formatSpecifier;
     uintptr_t pValue = uintptr_t(value);
 
-    switch (format) {
+    switch (spec) {
         case 'p':
             outputNumber(dest,
                          pValue,
@@ -349,17 +353,19 @@ inline void printfDetail(std::string& dest, const FormatState& state, T* value)
             break;
 
         default:
-            printfDetail(dest, state, static_cast<uintptr_t>(pValue));
+            printfDetail(format, static_cast<uintptr_t>(pValue));
     }
 }
 
 template <typename T>
-inline void printfDetail(std::string& dest, const FormatState& state, const T* value)
+inline void printfDetail(Format& format, const T* value)
 {
-    char format = state.formatSpecifier;
+    FormatState& state = format.state;
+    std::string& dest = format.dest;
+    char spec = state.formatSpecifier;
     uintptr_t pValue = uintptr_t(value);
 
-    switch (format) {
+    switch (spec) {
         case 'p':
             outputNumber(dest,
                          pValue,
@@ -372,99 +378,99 @@ inline void printfDetail(std::string& dest, const FormatState& state, const T* v
             break;
 
         default:
-            printfDetail(dest, state, static_cast<uintptr_t>(pValue));
+            printfDetail(format, static_cast<uintptr_t>(pValue));
     }
 }
 
 template <typename T>
-inline void printfDetail(std::string& dest, const FormatState& state, const std::set<T>& value)
+inline void printfDetail(Format& format, const std::set<T>& value)
 {
     for (const auto& v : value) {
-        printfDetail(dest, state, v);
+        printfDetail(format, v);
     };
 }
 
 template <typename T>
-inline void printfDetail(std::string& dest, const FormatState& state, const std::multiset<T>& value)
+inline void printfDetail(Format& format, const std::multiset<T>& value)
 {
     for (const auto& v : value) {
-        printfDetail(dest, state, v);
+        printfDetail(format, v);
     };
 }
 
 template <typename T>
-inline void printfDetail(std::string& dest, const FormatState& state, const std::unordered_set<T>& value)
+inline void printfDetail(Format& format, const std::unordered_set<T>& value)
 {
     for (const auto& v : value) {
-        printfDetail(dest, state, v);
+        printfDetail(format, v);
     };
 }
 
 template <typename T>
-inline void printfDetail(std::string& dest, const FormatState& state, const std::unordered_multiset<T>& value)
+inline void printfDetail(Format& format, const std::unordered_multiset<T>& value)
 {
     for (const auto& v : value) {
-        printfDetail(dest, state, v);
+        printfDetail(format, v);
     };
 }
 
 template <typename T>
-inline void printfDetail(std::string& dest, const FormatState& state, const std::deque<T>& value)
+inline void printfDetail(Format& format, const std::deque<T>& value)
 {
     for (const auto& v : value) {
-        printfDetail(dest, state, v);
+        printfDetail(format, v);
     };
 }
 
 template <typename T>
-inline void printfDetail(std::string& dest, const FormatState& state, const std::list<T>& value)
+inline void printfDetail(Format& format, const std::list<T>& value)
 {
     for (const auto& v : value) {
-        printfDetail(dest, state, v);
+        printfDetail(format, v);
     };
 }
 
 template <typename T>
-inline void printfDetail(std::string& dest, const FormatState& state, const std::forward_list<T>& value)
+inline void printfDetail(Format& format, const std::forward_list<T>& value)
 {
     for (const auto& v : value) {
-        printfDetail(dest, state, v);
+        printfDetail(format, v);
     };
 }
 
 template <typename T>
-inline void printfDetail(std::string& dest, const FormatState& state, const std::vector<T>& value)
+inline void printfDetail(Format& format, const std::vector<T>& value)
 {
     for (const auto& v : value) {
-        printfDetail(dest, state, v);
+        printfDetail(format, v);
     };
 }
 
 template <typename T, size_t N>
-inline void printfDetail(std::string& dest, const FormatState& state, const std::array<T, N>& value)
+inline void printfDetail(Format& format, const std::array<T, N>& value)
 {
     for (const auto& v : value) {
-        printfDetail(dest, state, v);
+        printfDetail(format, v);
     };
 }
 
 template<std::size_t I = 0, typename... Tp>
 inline typename std::enable_if<I == sizeof...(Tp), void>::type
-tupleDetail(std::string& dest, FormatState& state, const std::tuple<Tp...>& t)
+tupleDetail(Format& format, const std::tuple<Tp...>& t)
 { }
 
 template<std::size_t I = 0, typename... Tp>
 inline typename std::enable_if<I < sizeof...(Tp), void>::type
-tupleDetail(std::string& dest, FormatState& state, const std::tuple<Tp...>& t)
+tupleDetail(Format& format, const std::tuple<Tp...>& t)
 {
-    printfDetail(dest, state, std::get<I>(t));
-    tupleDetail<I + 1, Tp...>(dest, state, t);
+    printfDetail(format, std::get<I>(t));
+    tupleDetail<I + 1, Tp...>(format, t);
 }
 
 template <typename... Ts>
-inline void printfDetail(std::string& dest, FormatState& state, const std::tuple<Ts...>& value)
+inline void printfDetail(Format& format, const std::tuple<Ts...>& value)
 {
-    tupleDetail(dest, state, value);
+    tupleDetail(format, value);
 }
 
 template <typename T, typename enable = void>
@@ -495,13 +501,16 @@ struct ContainerDetail;
 template <typename T>
 struct ContainerDetail<T, typename std::enable_if<!std::is_class<T>::value && !std::is_array<T>::value>::type>
 {
-    void operator()(std::string& dest, FormatState& state, const T& value)
+    void operator()(Format& format, const T& value)
     {
+        FormatState& state = format.state;
+        std::string& dest = format.dest;
+
         if (state.prefixSize != 0) {
             dest.append(state.prefix, state.prefixSize);
         }
 
-        printfDetail(dest, state, value);
+        printfDetail(format, value);
 
         if (state.postfixSize != 0 && !(state.type & alternative)) {
             dest.append(state.suffix, state.postfixSize);
@@ -512,8 +521,11 @@ struct ContainerDetail<T, typename std::enable_if<!std::is_class<T>::value && !s
 template <typename T>
 struct ContainerDetail<T, typename std::enable_if<std::is_class<T>::value || std::is_array<T>::value>::type>
 {
-    void operator()(std::string& dest, FormatState& state, const T& value)
+    void operator()(Format& format, const T& value)
     {
+        FormatState& state = format.state;
+        std::string& dest = format.dest;
+
         using std::begin;
         using std::end;
 
@@ -522,7 +534,7 @@ struct ContainerDetail<T, typename std::enable_if<std::is_class<T>::value || std
                 dest.append(state.prefix, state.prefixSize);
             }
 
-            printfDetail(dest, state, *b);
+            printfDetail(format, *b);
 
             ++b;
 
@@ -534,38 +546,41 @@ struct ContainerDetail<T, typename std::enable_if<std::is_class<T>::value || std
 };
 
 template <typename T>
-void containerDetail(std::string& dest, FormatState& state, const T& value)
+void containerDetail(Format& format, const T& value)
 {
     ContainerDetail<T> c;
 
-    c(dest, state, value);
+    c(format, value);
 }
 
 template<std::size_t I = 0, typename... Tp>
 inline typename std::enable_if<I == sizeof...(Tp), void>::type
-tupleContainerDetail(std::string& dest, FormatState& state, const std::tuple<Tp...>& t)
+tupleContainerDetail(Format& format, const std::tuple<Tp...>& t)
 { }
 
 template<std::size_t I = 0, typename... Tp>
 inline typename std::enable_if<I < sizeof...(Tp), void>::type
-tupleContainerDetail(std::string& dest, FormatState& state, const std::tuple<Tp...>& t)
+tupleContainerDetail(Format& format, const std::tuple<Tp...>& t)
 {
+    FormatState& state = format.state;
+    std::string& dest = format.dest;
+
     if (state.prefixSize != 0) {
         dest.append(state.prefix, state.prefixSize);
     }
 
-    printfDetail(dest, state, std::get<I>(t));
+    printfDetail(format, std::get<I>(t));
     if (I != sizeof...(Tp) - 1 || (state.postfixSize != 0 && !(state.type & alternative))) {
         dest.append(state.suffix, state.postfixSize);
     }
 
-    tupleContainerDetail<I + 1, Tp...>(dest, state, t);
+    tupleContainerDetail<I + 1, Tp...>(format, t);
 }
 
 template <typename... Ts>
-void containerDetail(std::string& dest, FormatState& state, const std::tuple<Ts...>& value)
+void containerDetail(Format& format, const std::tuple<Ts...>& value)
 {
-    tupleContainerDetail(dest, state, value);
+    tupleContainerDetail(format, value);
 }
 
 template <typename T>
@@ -573,7 +588,6 @@ void printfOne(Format& format, const T& value)
 {
     ToSpec<T> toSpec;
     FormatState& state = format.state;
-    std::string& dest = format.dest;
 
     if (state.formatSpecifier == 0) {
         std::cerr << "TSIO: Extraneous parameter or missing format specifier." << std::endl;
@@ -635,27 +649,27 @@ void printfOne(Format& format, const T& value)
     }
 
     if (state.isContainerFormat) {
-        containerDetail(dest, state, value);
+        containerDetail(format, value);
     } else {
-        printfDetail(dest, state, value);
+        printfDetail(format, value);
     }
 
     format.parse();
 }
 
 #if __cplusplus < 201703L
-inline void printfNth(std::string&, FormatState&, size_t)
+inline void printfNth(Format&, size_t)
 {
     std::cerr << "TSIO: Invalid position in format." << std::endl;
 }
 
 template <typename T, typename... Ts>
-void printfNth(std::string& dest, FormatState& state, size_t index, const T& t, const Ts&... ts)
+void printfNth(Format& format, size_t index, const T& t, const Ts&... ts)
 {
     if (index == 1) {
-        printfDetail(dest, state, t);
+        printfDetail(format, t);
     } else {
-        printfNth(dest, state, index - 1, ts...);
+        printfNth(format, index - 1, ts...);
     }
 }
 inline void readSpecNum(int& dest, FormatState&, size_t)
@@ -678,10 +692,10 @@ void readSpecNum(int& dest, FormatState& state, size_t index, const T& t, const 
 }
 #else
 template <typename T, typename... Ts>
-bool printfDispatch(std::string& dest, FormatState& state, size_t index, const T& t, const Ts&... ts)
+bool printfDispatch(Format& format, size_t index, const T& t, const Ts&... ts)
 {
     if (index == 1) {
-        printfDetail(dest, state, t);
+        printfDetail(format, t);
         return true;
     } else {
         return false;
@@ -689,11 +703,11 @@ bool printfDispatch(std::string& dest, FormatState& state, size_t index, const T
 }
 
 template <typename... Ts>
-void printfNth(std::string& dest, FormatState& state, size_t index, const Ts&... ts)
+void printfNth(Format& format, size_t index, const Ts&... ts)
 {
-    auto i = state.position + 1;
+    auto i = format.state.position + 1;
 
-    static_cast<void>(((i--, printfDispatch(dest, state, i, ts)) || ...));
+    static_cast<void>(((i--, printfDispatch(format, i, ts)) || ...));
 }
 
 template <typename T, typename... Ts>
@@ -722,7 +736,6 @@ void readSpecNum(int& dest, FormatState& state, size_t index, const Ts&... ts)
 template <typename... Ts>
 void printfPositionalOne(Format& format, const Ts&... ts)
 {
-    std::string& dest = format.dest;
     FormatState& state = format.state;
 
     if (state.formatSpecifier == 0) {
@@ -766,7 +779,7 @@ void printfPositionalOne(Format& format, const Ts&... ts)
         }
     }
 
-    printfNth(dest, state, state.position, ts...);
+    printfNth(format, state.position, ts...);
 
     format.parse();
 }

@@ -412,7 +412,7 @@ static void test()
 {
     std::string text;
 
-    sprintf(text, "t: '% 0*d'", 15, 1234);
+    sprintf(text, "t: ''% 03d", 1);
 }
 
 static void examples()
