@@ -18,9 +18,7 @@ tsio: type safe, printf compatible sprintf and fprintf functions, and an io mani
 
   'tsio::fstring' returns a formatted std::string;
 
-  the 'tsio' functions have approximately the same speed as 'std::sprintf'
-  (integer and string formatting is somewhat faster; floating point formatting
-  is somewhat slower).
+  the 'tsio' functions have approximately the same speed as 'std::sprintf'.
 
   It is usualy safe to specify 'using namespace tsio;', since the compiler can
   disambiguate 'tsio::sprintf' and 'tsio::fprintf' from 'std::sprintf' and

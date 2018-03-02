@@ -27,7 +27,7 @@
  */
 
 #include "tsio.h"
-#include "vector"
+#include "map"
 
 using namespace tsio;
 
@@ -246,6 +246,43 @@ static void testPositional()
     expect(buf, text);
 }
 
+static void testRepeatingFormats()
+{
+    std::string text = fstring("***%1{-%}***");
+
+    expect("***-***", text);
+
+    text = fstring("***%10{-%}***");
+    expect("***----------***", text);
+
+    text = fstring("***%3{%d%}***", 1, 2, 3);
+    expect("***123***", text);
+
+    text = fstring("***%3{%d%2{  %}%}***", 1, 2, 3);
+    expect("***1    2    3    ***", text);
+
+    text = fstring("%10{-=%}");
+    expect("-=-=-=-=-=-=-=-=-=-=", text);
+
+    text = fstring("%5{--%3{**%}==%}");
+    expect("--******==--******==--******==--******==--******==", text);
+
+    text = fstring("%*{abc%}", 5);
+    expect("abcabcabcabcabc", text);
+
+    text = fstring("%3{%4d%}", 1, 22, 333);
+    expect("   1  22 333", text);
+
+    text = fstring("%3{%4{*%}%}");
+    expect("************", text);
+
+    text = fstring("%5d %2{**%} %s %*{+%} %*d %*{ %d%} %2{!%}?", 1, "two", 3, 4, 3, 5, 6, 7, 8, 9, 10);
+    expect("    1 **** two +++    3  6 7 8 9 10 !!?", text);
+
+    text = fstring("prefix %4{*%} %3{%3$4d%} %*4${!%}", 1, 22, 333, 2);
+    expect("prefix ****  333 333 333 !!", text);
+}
+
 static void extensions()
 {
     std::string text = fstring("%C %C", '\x12', 'a');
@@ -254,21 +291,6 @@ static void extensions()
 
     text = fstring("%#C %#C %#C", '\a', 'a', '\x5');
     expect("\\a a \\005", text);
-
-    std::vector<int> v = {10, 200, 3000};
-
-    text = fstring("vector { %10d }", v);
-    expect("vector {         10       200      3000 }", text);
-
-    std::array<double, 3> a = {10.11, 200.222, 3000.3333};
-
-    text = fstring("array { %10.3f }", a);
-    expect("array {     10.110   200.222  3000.333 }", text);
-
-    std::set<int> s = {1, 100, 1000, 2, 3};
-
-    text = fstring("set {%5d }", s);
-    expect("set {    1    2    3  100 1000 }", text);
 
     std::array<char, 256> a1;
 
@@ -339,24 +361,6 @@ static void extensions()
     text = fstring("%06s %5.2s %10.3s", 123, 234.567, 98.765);
     expect("000123 2.3e+02       98.8", text);
 
-    text = fstring("%10{-=%}");
-    expect("-=-=-=-=-=-=-=-=-=-=", text);
-
-    text = fstring("%5{--%3{**%}==%}");
-    expect("--******==--******==--******==--******==--******==", text);
-
-    text = fstring("%*{abc%}", 5);
-    expect("abcabcabcabcabc", text);
-
-    text = fstring("%3{%4d%}", 1, 22, 333);
-    expect("   1  22 333", text);
-
-    text = fstring("%3{%4{*%}%}");
-    expect("************", text);
-
-    text = fstring("%5d %2{**%} %s %*{+%} %*d %*{ %d%} %2{!%}", 1, "two", 3, 4, 3, 5, 6, 7);
-    expect("    1 **** two +++ 4  5 6 7 !!", text);
-
     text = fstring("%'*7d', %#'*7x", -23, 0xab);
     expect("-****23', 0x***ab", text);
 
@@ -366,11 +370,29 @@ static void extensions()
     text = fstring("%\"*20s", "abc");
     expect("*****************abc", text);
 
+    std::vector<int> v = {10, 200, 3000};
+
+    text = fstring("vector { %10d }", v);
+    expect("vector {         10       200      3000 }", text);
+
+    std::array<double, 3> a = {10.11, 200.222, 3000.3333};
+
+    text = fstring("array { %10.3f }", a);
+    expect("array {     10.110   200.222  3000.333 }", text);
+
+    std::set<int> s = {1, 100, 1000, 2, 3};
+
+    text = fstring("set {%5d }", s);
+    expect("set {    1    2    3  100 1000 }", text);
+
     text = fstring("%*4${!%}", 1, 22, 333, 2);
     expect("!!", text);
 
-    text = fstring("prefix %4{*%} %3{%3$4d%} %*4${!%}", 1, 22, 333, 2);
-    expect("prefix ****  333 333 333 !!", text);
+    text = fstring("%[v=%d, %]", 66);
+    expect("v=66, ", text);
+
+    text = fstring("%#[v=%d, %]", 66);
+    expect("v=66", text);
 
     std::vector<int> v1 = {9, 8, 7, 6};
     double fa[] = {1.2, 2.3, 3.4, 4.55555};
@@ -393,7 +415,18 @@ static void extensions()
     expect("v=1, v=2.3, v=four, ", text);
 
     text = fstring("{ %#[v=%s, %] }", t);
-    expect("{ v=1, v=2.30000, v=four }", text);
+    expect("{ v=1, v=2.3, v=four }", text);
+
+    std::map<int, const char*> m = { {1, "one"}, {3, "three"}, {2, "two"} };
+
+    text = fstring("%#[%<{ key: %3d, value: %5s }%>, %]", m);
+    expect("{ key:   1, value:   one }, { key:   2, value:   two }, { key:   3, value: three }", text);
+
+    text = fstring("%#{ { %[%6s%] }", m);
+    expect(" {      1   one     2   two     3 three }", text);
+
+    text = fstring("%5s", std::make_pair(2, 4));
+    expect("    2    4", text);
 }
 
 static void run()
@@ -404,6 +437,7 @@ static void run()
     testStringDynamics();
     testPrintfN();
     testPrintString();
+    testRepeatingFormats();
     testPositional();
     extensions();
 }
@@ -412,7 +446,9 @@ static void test()
 {
     std::string text;
 
-    sprintf(text, "t: ''% 03d", 1);
+    text = fstring("%.d", 0);
+
+    std::cout << text;
 }
 
 static void examples()
