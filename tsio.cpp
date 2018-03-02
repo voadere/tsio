@@ -937,6 +937,8 @@ void tsioImplementation::Format::dump()
 
 void tsio::fmt::initialize(const char* format)
 {
+    state.reset();
+
     if (format == 0) {
         return;
     }

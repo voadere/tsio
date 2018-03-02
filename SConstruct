@@ -50,9 +50,15 @@ libources=['tsio.cpp']
 
 tsiolib=compiler.Library('tsio', libources)
 
-sources=['tsioTest.cpp']
+testsources=['tsioTest.cpp']
 
-compiler.Program('tsioTest', sources,
+compiler.Program('tsioTest', testsources,
+         LIBS=['tsio'], LIBPATH=['.'],
+         CPPPATH=['.'])
+
+examplesources=['example.cpp']
+
+compiler.Program('example', examplesources,
          LIBS=['tsio'], LIBPATH=['.'],
          CPPPATH=['.'])
 

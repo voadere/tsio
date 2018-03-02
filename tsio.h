@@ -697,16 +697,9 @@ struct ContainerDetail<T, typename std::enable_if<std::is_class<T>::value || std
 template <typename T>
 void containerDetail(Format& format, const T& value)
 {
-    auto child = format.nextNode->child;
+    ContainerDetail<T> c;
 
-    if (child == nullptr || child->next == nullptr ||
-            child->next->state.formatSpecifier != ']') {
-        std::cerr << "TSIO: Invalid container format" << std::endl;
-    } else {
-        ContainerDetail<T> c;
-
-        c(format, value);
-    }
+    c(format, value);
 }
 
 template<std::size_t I = 0, typename... Tp>
