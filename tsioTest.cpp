@@ -417,6 +417,9 @@ static void extensions()
     text = fstring("{ %#[v=%s, %] }", t);
     expect("{ v=1, v=2.3, v=four }", text);
 
+    text = fstring("%<%5d %5.2f %10s%>", t);
+    expect("    1  2.30       four", text);
+
     std::map<int, const char*> m = { {1, "one"}, {3, "three"}, {2, "two"} };
 
     text = fstring("%#[%<{ key: %3d, value: %5s }%>, %]", m);
