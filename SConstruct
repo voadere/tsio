@@ -26,7 +26,7 @@ if DEBUG == '1':
     gcc.Append(CCFLAGS=' -g')
     clang.Append(CCFLAGS=' -g')
 else:
-    gcc.Append(CCFLAGS=' -O3 -fomit-frame-pointer -Wall -Wmissing-declarations -Wsign-compare -Wconversion -Wno-sign-conversion -Wold-style-cast -Wno-parentheses -Wno-attributes')
+    gcc.Append(CCFLAGS=' -O3 -fomit-frame-pointer -Wall -Wmissing-declarations -Wsign-compare -Wno-sign-conversion -Wold-style-cast -Wno-parentheses -Wno-attributes')
     clang.Append(CCFLAGS=' -O3 -fomit-frame-pointer -Wall -Wmissing-declarations -Wsign-compare -Wconversion -Wno-sign-conversion -Wold-style-cast -Wno-parentheses -Wno-missing-braces')
 
 
@@ -50,15 +50,7 @@ libources=['tsio.cpp']
 
 tsiolib=compiler.Library('tsio', libources)
 
-testsources=['tsioTest.cpp']
+Export(['compiler'])
 
-compiler.Program('tsioTest', testsources,
-         LIBS=['tsio'], LIBPATH=['.'],
-         CPPPATH=['.'])
-
-examplesources=['example.cpp']
-
-compiler.Program('example', examplesources,
-         LIBS=['tsio'], LIBPATH=['.'],
-         CPPPATH=['.'])
-
+SConscript(['examples/SConscript'])
+SConscript(['test/SConscript'])

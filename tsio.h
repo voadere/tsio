@@ -802,7 +802,7 @@ void tupleDetail(Format& format, const std::tuple<Ts...>& value)
     auto child = format.getNextSibling(format.nextNode, true);
 
     if (child == nullptr || child->state.formatSpecifier != '>') {
-        std::cerr << "TSIO: Invalid container format" << std::endl;
+        std::cerr << "TSIO: Invalid tuple format" << std::endl;
         return;
     }
 
@@ -826,7 +826,7 @@ void tupleDetail(Format& format, const std::pair<T1, T2>& value)
     auto child = format.getNextSibling(format.nextNode, true);
 
     if (child == nullptr || child->state.formatSpecifier != '>') {
-        std::cerr << "TSIO: Invalid container format" << std::endl;
+        std::cerr << "TSIO: Invalid tuple format" << std::endl;
         return;
     }
 
@@ -843,16 +843,16 @@ template <typename T>
 void tupleDetail(Format& format, const T& value)
 {
     auto nextNode = format.nextNode;
+
+    if (nextNode == nullptr) {
+        std::cerr << "TSIO: Invalid tuple format" << std::endl;
+        return;
+    }
+
     FormatState& state = nextNode->state;
 
     format.nextNode = nextNode->child;
-    if (state.formatSpecifier == '[') {
-        containerDetail(format, value);
-    } else if (state.formatSpecifier == '<') {
-        tupleDetail(format, value);
-    } else {
-        printfDetail(format, value);
-    }
+    tupleDetail(format, value);
 
     format.nextNode = nextNode;
 }
