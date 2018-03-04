@@ -138,12 +138,25 @@ static void testStringIntegral()
                 test(value, "diouxX", spec1, spec2);
             }
 
-            test(0x8000000000000000ull, "diouxX", spec1, spec2, nullptr, nullptr, "ll");
+            test(0x8000000000000000ll, "diouxX", spec1, spec2, nullptr, nullptr, "ll");
             test('c', "cdiouxX", spec1, spec2);
             test(true, "diouxX", spec1, spec2);
             test(false, "diouxX", spec1, spec2);
         }
     }
+
+    unsigned untValues[] = {1234, 1, 0, 0x80000000};
+
+    for (auto spec1 : spec1s) {
+        for (auto spec2 : spec2s) {
+            for (auto value : untValues) {
+                test(value, "diouxX", spec1, spec2);
+            }
+
+            test(0x8000000000000000ull, "diouxX", spec1, spec2, nullptr, nullptr, "ll");
+        }
+    }
+
 }
 
 static void testStringFloatingPoint()
@@ -170,6 +183,7 @@ static void testStringPointer()
 
     for (auto spec1 : spec1s) {
         for (auto spec2 : spec2s) {
+
             test("The test", "s", spec1, spec2);
             test(t1, "diouxXs", spec1, spec2);
         }
@@ -430,6 +444,12 @@ static void extensions()
 
     text = fstring("%5s", std::make_pair(2, 4));
     expect("    2    4", text);
+
+    text = fstring("%d%#10T%d%#30T%d%#15T%d", 1, 2222, 3, 4);
+    expect("1        2222                3\n              4", text);
+
+    text = fstring("%d%5T%d%5T%d%5T%d%5T%d", 1, 1234, 123456, 12345, 9);
+    expect("1    1234 123456    12345     9", text);
 }
 
 static void run()
@@ -448,8 +468,6 @@ static void run()
 static void test()
 {
     std::string text;
-
-    text = fstring("%.d", 0);
 
     std::cout << text;
 }

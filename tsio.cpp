@@ -767,6 +767,30 @@ tsioImplementation::FormatNode* tsioImplementation::Format::buildTree(bool& posi
     return result;
 }
 
+void tsioImplementation::Format::tabTo(unsigned column, bool absolute)
+{
+    size_t pos = dest.find_last_of('\n');
+    size_t currentColumn = (pos == std::string::npos) ? dest.size() : (dest.size() - pos - 1);
+
+    if (absolute) {
+        column--;
+
+        if (currentColumn < column) {
+            dest.append(column - currentColumn, ' ');
+        } else {
+            dest.push_back('\n');
+            dest.append(column, ' ');
+        }
+    } else {
+        auto delta = column - (currentColumn % column);
+        if (delta == 0) {
+            delta = column;
+        }
+
+        dest.append(delta, ' ');
+    }
+}
+
 tsioImplementation::FormatNode* tsioImplementation::Format::getNextSibling(
         FormatNode* node, bool first)
 {
@@ -793,6 +817,13 @@ tsioImplementation::FormatNode* tsioImplementation::Format::getNextSibling(
 
             dest.push_back('%');
             node = node->next;
+
+            continue;
+        }
+
+        if (spec == 'T') {
+            tabTo(state.width, node->state.type & alternative);
+            nextNode = nextNode->next;
 
             continue;
         }
@@ -856,6 +887,13 @@ void tsioImplementation::Format::getNextNode(bool first)
             }
 
             dest.push_back('%');
+            nextNode = nextNode->next;
+
+            continue;
+        }
+
+        if (spec == 'T') {
+            tabTo(state.width, state.type & alternative);
             nextNode = nextNode->next;
 
             continue;
@@ -1049,6 +1087,140 @@ std::ostream& tsio::fmt::operator()(std::ostream& out) const
     return out;
 }
 
+void tsioImplementation::printfDetail(Format& format, long long sValue,
+        unsigned long long uValue, bool isSigned)
+{
+    FormatState& state = format.nextNode->state;
+    std::string& dest = format.dest;
+    char spec = state.formatSpecifier;
+    char fillCharacter = state.fillCharacter;
+
+    auto type = state.type;
+
+    if ((type & numericfill) && state.precisionGiven()) {
+        type &= ~numericfill;
+        fillCharacter = ' ';
+    }
+
+    // let's favor the most used %d format
+    if (spec == 'd' || spec == 'i') {
+        outputNumber(dest,
+                sValue,
+                10,
+                state.width,
+                state.precisionGiven() ? state.precision : 1,
+                type | signedNumber,
+                fillCharacter);
+        return;
+    }
+
+    // The following binary search is faster than a switch statenent
+    if (spec < 'n') {
+        if (spec < 'b') {
+            if (spec == 'X') {
+                outputNumber(dest,
+                        uValue,
+                        16,
+                        state.width,
+                        state.precisionGiven() ? state.precision : 1,
+                        type | upcase,
+                        fillCharacter);
+                return;
+            }
+
+            if (spec == 'C') {
+                char c = char(sValue);
+                outputString(dest,
+                        &c,
+                        1,
+                        state.width,
+                        state.precisionGiven() ? (state.precision > 0 ? state.precision : 1)
+                        : std::numeric_limits<int>::max(),
+                        type | nice,
+                        fillCharacter);
+                return;
+            }
+        } else {
+            if (spec == 'b') {
+                outputNumber(dest, uValue, 2, state.width, state.precision,
+                        type, fillCharacter);
+                return;
+            }
+
+            if (spec == 'c') {
+                char c = char(sValue);
+                outputString(dest,
+                        &c,
+                        1,
+                        state.width,
+                        state.precisionGiven() ? (state.precision > 0 ? state.precision : 1)
+                        : std::numeric_limits<int>::max(),
+                        type,
+                        fillCharacter);
+                return;
+            }
+        }
+    } else if (spec < 'u') {
+        if (spec == 'n') {
+            std::cerr << "TSIO: Did you forget to specify the parameter for '%n' by pointer?" << std::endl;
+            return;
+        }
+
+        if (spec == 'o') {
+            outputNumber(dest,
+                         uValue,
+                         8,
+                         state.width,
+                         state.precisionGiven() ? state.precision : 1,
+                         type,
+                         fillCharacter);
+            return;
+        }
+
+        if (spec == 's') {
+            if (isSigned) {
+                outputNumber(dest,
+                             sValue,
+                             10,
+                             state.width,
+                             state.precisionGiven() ? state.precision : 1,
+                             type | signedNumber,
+                             fillCharacter);
+            } else {
+                outputNumber(dest,
+                             uValue,
+                             10,
+                             state.width,
+                             state.precisionGiven() ? state.precision : 1,
+                             type,
+                             fillCharacter);
+            }
+
+            return;
+        }
+    } else if (spec == 'u') {
+        outputNumber(dest,
+                uValue,
+                10,
+                state.width,
+                state.precisionGiven() ? state.precision : 1,
+                type,
+                fillCharacter);
+        return;
+    } else if (spec == 'x') {
+        outputNumber(dest,
+                uValue,
+                16,
+                state.width,
+                state.precisionGiven() ? state.precision : 1,
+                type,
+                fillCharacter);
+        return;
+    }
+
+    std::cerr << "TSIO: Invalid format '" << spec << "' for integeral value" << std::endl;
+}
+
 void tsioImplementation::printfDetail(Format& format, const std::string& value)
 {
     FormatState& state = format.nextNode->state;
@@ -1197,32 +1369,3 @@ void tsioImplementation::printfDetail(Format& format, bool value)
     }
 }
 
-void tsioImplementation::skipAfter(const char*& format, char startChar, char endChar)
-{
-    const char* f = format;
-    size_t count = 0;
-
-    while (*f != 0) {
-        char ch = *(f++);
-
-        if (ch == '%') {
-            ch = *(f++);
-
-            while (ch >= '0' && ch <= '9') {
-                ch = *(f++);
-            }
-
-            if (ch == startChar) {
-                count++;
-            } else if (ch == endChar) {
-                if (count-- == 0) {
-                    format = f;
-                    return;
-                }
-            }
-        }
-    }
-
-    std::cerr << "TSIO: Missing '%" << endChar << "'\n";
-    format = f;
-}

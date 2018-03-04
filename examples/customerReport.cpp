@@ -48,7 +48,7 @@ using ReportData = std::vector<CustomerData>;
 static ReportData setUp()
 {
     ReportData report;
-    MonthlyData monthly = { 1.2, 2.3, 3.4 };
+    MonthlyData monthly = { 1.2f, 2.3f, 3.4f };
 
     report.push_back(make_tuple(1, "Jetson", 123.45, monthly));
 
@@ -315,6 +315,8 @@ static void withPrintf(const ReportData& report, unsigned year, unsigned quarter
 /*
  * The function overview shows the same oprintf statement separated into
  * its different parts with a description of each part.
+ *
+ * for complex formats, it is helpful to write them in this way.
  */
 
 static void overview(const ReportData& report, unsigned year, unsigned quarter)

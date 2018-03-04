@@ -238,6 +238,7 @@ struct Format
     void getNextNode(bool first = false);
     FormatNode* getNextSibling(FormatNode* node, bool first = false);
     void skipToFormat();
+    void tabTo(unsigned column, bool absolute);
 
     const char* format;
     std::string& dest;
@@ -278,144 +279,20 @@ void printfDetail(Format& format, const char* value);
 void printfDetail(Format& format, double value);
 void printfDetail(Format& format, float value);
 void printfDetail(Format& format, bool value);
+void printfDetail(Format& format, long long sValue, unsigned long long uValue,
+        bool isSigned);
 
-template <typename T>
-inline void printfDetail(Format& format, const T& value)
+template <typename T, typename std::enable_if<std::is_integral<T>{}, int>::type = 0>
+void printfDetail(Format& format, const T& value)
 {
-    FormatState& state = format.nextNode->state;
-    std::string& dest = format.dest;
     typename std::make_signed<T>::type sValue = value;
     typename std::make_unsigned<T>::type uValue = value;
-    char spec = state.formatSpecifier;
-    char fillCharacter = state.fillCharacter;
 
-    auto type = state.type;
-
-    if ((type & numericfill) && state.precisionGiven()) {
-        type &= ~numericfill;
-        fillCharacter = ' ';
-    }
-
-    switch (spec) {
-        case 'b':
-            outputNumber(dest, uValue, 2, state.width, state.precision, type, fillCharacter);
-            break;
-
-        case 'c': {
-            char c = char(value);
-            outputString(dest,
-                         &c,
-                         1,
-                         state.width,
-                         state.precisionGiven() ? (state.precision > 0 ? state.precision : 1)
-                                              : std::numeric_limits<int>::max(),
-                         type,
-                         fillCharacter);
-        }
-
-        break;
-
-        case 'C': {
-            char c = char(value);
-            outputString(dest,
-                         &c,
-                         1,
-                         state.width,
-                         state.precisionGiven() ? (state.precision > 0 ? state.precision : 1)
-                                              : std::numeric_limits<int>::max(),
-                         type | nice,
-                         fillCharacter);
-
-        }
-
-        break;
-
-        case 'd':
-        case 'i':
-            outputNumber(dest,
-                         sValue,
-                         10,
-                         state.width,
-                         state.precisionGiven() ? state.precision : 1,
-                         type | signedNumber,
-                         fillCharacter);
-            break;
-
-        case 's':
-            if (std::is_signed<T>::value) {
-                outputNumber(dest,
-                             sValue,
-                             10,
-                             state.width,
-                             state.precisionGiven() ? state.precision : 1,
-                             type | signedNumber,
-                             fillCharacter);
-            } else {
-                outputNumber(dest,
-                             uValue,
-                             10,
-                             state.width,
-                             state.precisionGiven() ? state.precision : 1,
-                             type,
-                             fillCharacter);
-            }
-
-            break;
-
-        case 'o':
-            outputNumber(dest,
-                         uValue,
-                         8,
-                         state.width,
-                         state.precisionGiven() ? state.precision : 1,
-                         type,
-                         fillCharacter);
-
-            break;
-
-        case 'u':
-            outputNumber(dest,
-                         uValue,
-                         10,
-                         state.width,
-                         state.precisionGiven() ? state.precision : 1,
-                         type,
-                         fillCharacter);
-
-            break;
-
-        case 'x':
-            outputNumber(dest,
-                         uValue,
-                         16,
-                         state.width,
-                         state.precisionGiven() ? state.precision : 1,
-                         type,
-                         fillCharacter);
-
-            break;
-
-        case 'X':
-            outputNumber(dest,
-                         uValue,
-                         16,
-                         state.width,
-                         state.precisionGiven() ? state.precision : 1,
-                         type | upcase,
-                         fillCharacter);
-
-            break;
-
-        case 'n':
-            std::cerr << "TSIO: Did you forget to specify the parameter for '%n' by pointer?" << std::endl;
-
-        default:
-            std::cerr << "TSIO: Invalid format '" << spec << "' for integeral value" << std::endl;
-    }
+    printfDetail(format, sValue, uValue, std::is_signed<T>::value);
 }
 
 template <typename T>
-inline void printfDetail(Format& format, T* value)
+void printfDetail(Format& format, T* value)
 {
     FormatState& state = format.nextNode->state;
     std::string& dest = format.dest;
@@ -447,7 +324,7 @@ inline void printfDetail(Format& format, T* value)
 }
 
 template <typename T>
-inline void printfDetail(Format& format, const T* value)
+void printfDetail(Format& format, const T* value)
 {
     FormatState& state = format.nextNode->state;
     std::string& dest = format.dest;
@@ -472,7 +349,7 @@ inline void printfDetail(Format& format, const T* value)
 }
 
 template <typename T1, typename T2>
-inline void printfDetail(Format& format, const std::map<T1, T2>& value)
+void printfDetail(Format& format, const std::map<T1, T2>& value)
 {
     for (const auto& v : value) {
         printfDetail(format, v);
@@ -480,7 +357,7 @@ inline void printfDetail(Format& format, const std::map<T1, T2>& value)
 }
 
 template <typename T>
-inline void printfDetail(Format& format, const std::set<T>& value)
+void printfDetail(Format& format, const std::set<T>& value)
 {
     for (const auto& v : value) {
         printfDetail(format, v);
@@ -488,7 +365,7 @@ inline void printfDetail(Format& format, const std::set<T>& value)
 }
 
 template <typename T>
-inline void printfDetail(Format& format, const std::multiset<T>& value)
+void printfDetail(Format& format, const std::multiset<T>& value)
 {
     for (const auto& v : value) {
         printfDetail(format, v);
@@ -496,7 +373,7 @@ inline void printfDetail(Format& format, const std::multiset<T>& value)
 }
 
 template <typename T>
-inline void printfDetail(Format& format, const std::unordered_set<T>& value)
+void printfDetail(Format& format, const std::unordered_set<T>& value)
 {
     for (const auto& v : value) {
         printfDetail(format, v);
@@ -504,7 +381,7 @@ inline void printfDetail(Format& format, const std::unordered_set<T>& value)
 }
 
 template <typename T>
-inline void printfDetail(Format& format, const std::unordered_multiset<T>& value)
+void printfDetail(Format& format, const std::unordered_multiset<T>& value)
 {
     for (const auto& v : value) {
         printfDetail(format, v);
@@ -512,7 +389,7 @@ inline void printfDetail(Format& format, const std::unordered_multiset<T>& value
 }
 
 template <typename T>
-inline void printfDetail(Format& format, const std::deque<T>& value)
+void printfDetail(Format& format, const std::deque<T>& value)
 {
     for (const auto& v : value) {
         printfDetail(format, v);
@@ -520,7 +397,7 @@ inline void printfDetail(Format& format, const std::deque<T>& value)
 }
 
 template <typename T>
-inline void printfDetail(Format& format, const std::list<T>& value)
+void printfDetail(Format& format, const std::list<T>& value)
 {
     for (const auto& v : value) {
         printfDetail(format, v);
@@ -528,7 +405,7 @@ inline void printfDetail(Format& format, const std::list<T>& value)
 }
 
 template <typename T>
-inline void printfDetail(Format& format, const std::forward_list<T>& value)
+void printfDetail(Format& format, const std::forward_list<T>& value)
 {
     for (const auto& v : value) {
         printfDetail(format, v);
@@ -536,7 +413,7 @@ inline void printfDetail(Format& format, const std::forward_list<T>& value)
 }
 
 template <typename T>
-inline void printfDetail(Format& format, const std::vector<T>& value)
+void printfDetail(Format& format, const std::vector<T>& value)
 {
     for (const auto& v : value) {
         printfDetail(format, v);
@@ -544,7 +421,7 @@ inline void printfDetail(Format& format, const std::vector<T>& value)
 }
 
 template <typename T, size_t N>
-inline void printfDetail(Format& format, const std::array<T, N>& value)
+void printfDetail(Format& format, const std::array<T, N>& value)
 {
     for (const auto& v : value) {
         printfDetail(format, v);
@@ -552,12 +429,12 @@ inline void printfDetail(Format& format, const std::array<T, N>& value)
 }
 
 template<std::size_t I = 0, typename... Tp>
-inline typename std::enable_if<I == sizeof...(Tp), void>::type
+typename std::enable_if<I == sizeof...(Tp), void>::type
 tuplePrintfDetail(Format& format, const std::tuple<Tp...>& value)
 { }
 
 template<std::size_t I = 0, typename... Tp>
-inline typename std::enable_if<I < sizeof...(Tp), void>::type
+typename std::enable_if<I < sizeof...(Tp), void>::type
 tuplePrintfDetail(Format& format, const std::tuple<Tp...>& value)
 {
     printfDetail(format, std::get<I>(value));
@@ -565,13 +442,13 @@ tuplePrintfDetail(Format& format, const std::tuple<Tp...>& value)
 }
 
 template <typename... Ts>
-inline void printfDetail(Format& format, const std::tuple<Ts...>& value)
+void printfDetail(Format& format, const std::tuple<Ts...>& value)
 {
     tuplePrintfDetail(format, value);
 }
 
 template <typename T1, typename T2>
-inline void printfDetail(Format& format, const std::pair<T1, T2>& value)
+void printfDetail(Format& format, const std::pair<T1, T2>& value)
 {
     printfDetail(format, std::tuple<T1, T2>(value));
 }
@@ -594,8 +471,6 @@ struct ToSpec<T, typename std::enable_if<std::is_integral<T>::value>::type>
         return int(value);
     }
 };
-
-void skipAfter(const char*& format, char startChar, char endChar);
 
 template <typename T, typename enable = void>
 struct ContainerDetail;
@@ -703,12 +578,12 @@ void containerDetail(Format& format, const T& value)
 }
 
 template<std::size_t I = 0, typename... Tp>
-inline typename std::enable_if<I == sizeof...(Tp), void>::type
+typename std::enable_if<I == sizeof...(Tp), void>::type
 tupleContainerDetail(Format& format, const std::tuple<Tp...>& value)
 { }
 
 template<std::size_t I = 0, typename... Tp>
-inline typename std::enable_if<I < sizeof...(Tp), void>::type
+typename std::enable_if<I < sizeof...(Tp), void>::type
 tupleContainerDetail(Format& format, const std::tuple<Tp...>& value)
 {
     auto nextNode = format.nextNode;
@@ -762,12 +637,12 @@ void containerDetail(Format& format, const std::pair<T1, T2>& value)
 }
 
 template<std::size_t I = 0, typename... Tp>
-inline typename std::enable_if<I == sizeof...(Tp), void>::type
+typename std::enable_if<I == sizeof...(Tp), void>::type
 tupleTupleDetail(Format& format, const std::tuple<Tp...>& value)
 { }
 
 template<std::size_t I = 0, typename... Tp>
-inline typename std::enable_if<I < sizeof...(Tp), void>::type
+typename std::enable_if<I < sizeof...(Tp), void>::type
 tupleTupleDetail(Format& format, const std::tuple<Tp...>& value)
 {
     std::string& dest = format.dest;
@@ -848,8 +723,6 @@ void tupleDetail(Format& format, const T& value)
         std::cerr << "TSIO: Invalid tuple format" << std::endl;
         return;
     }
-
-    FormatState& state = nextNode->state;
 
     format.nextNode = nextNode->child;
     tupleDetail(format, value);
@@ -1085,7 +958,7 @@ void printfPositionalOne(Format& format, const Ts&... ts)
 
 #if __cplusplus < 201703L
 template <typename T, typename... Ts>
-inline void unpack(Format& format, const T& value, const Ts&... ts)
+void unpack(Format& format, const T& value, const Ts&... ts)
 {
     printfOne(format, value);
     unpack(format, ts...);
