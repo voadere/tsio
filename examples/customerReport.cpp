@@ -95,6 +95,8 @@ static void withOstream(const ReportData& report, unsigned year, unsigned quarte
     std::cout << std::setw(72) << std::setfill('-') << "" << std::setfill(' ') << '\n';
 }
 
+using tsio::oprintf;
+
 /*
  * The following functions named stepNN are progressive steps in morphing
  * the ostream based solution into a tsio::oprintf based solution.
@@ -115,8 +117,6 @@ static void withOstream(const ReportData& report, unsigned year, unsigned quarte
 
 static void step1(const ReportData& report, unsigned year, unsigned quarter)
 {
-    using tsio::oprintf;
-
     std::cout << "Yearly report for " << std::setw(4) << year << "Q" << quarter << '\n' <<
         std::setw(72) << std::setfill('-') << "" << std::setfill(' ') << '\n';
 
@@ -155,8 +155,6 @@ static void step1(const ReportData& report, unsigned year, unsigned quarter)
 
 static void step2(const ReportData& report, unsigned year, unsigned quarter)
 {
-    using tsio::oprintf;
-
     std::cout << "Yearly report for " << std::setw(4) << year << "Q" << quarter << '\n' <<
         std::setw(72) << std::setfill('-') << "" << std::setfill(' ') << '\n';
 
@@ -190,8 +188,6 @@ static void step2(const ReportData& report, unsigned year, unsigned quarter)
 
 static void step3(const ReportData& report, unsigned year, unsigned quarter)
 {
-    using tsio::oprintf;
-
     std::cout << "Yearly report for " << std::setw(4) << year << "Q" << quarter << '\n' <<
         std::setw(72) << std::setfill('-') << "" << std::setfill(' ') << '\n';
 
@@ -220,8 +216,6 @@ static void step3(const ReportData& report, unsigned year, unsigned quarter)
 
 static void step4(const ReportData& report, unsigned year, unsigned quarter)
 {
-    using tsio::oprintf;
-
     std::cout << "Yearly report for " << std::setw(4) << year << "Q" << quarter << '\n' <<
         std::setw(72) << std::setfill('-') << "" << std::setfill(' ') << '\n';
 
@@ -249,8 +243,6 @@ static void step4(const ReportData& report, unsigned year, unsigned quarter)
 
 static void step5(const ReportData& report, unsigned year, unsigned quarter)
 {
-    using tsio::oprintf;
-
     std::cout << "Yearly report for " << std::setw(4) << year << "Q" << quarter << '\n' <<
         std::setw(72) << std::setfill('-') << "" << std::setfill(' ') << '\n';
 
@@ -280,8 +272,6 @@ static void step5(const ReportData& report, unsigned year, unsigned quarter)
 
 static void step6(const ReportData& report, unsigned year, unsigned quarter)
 {
-    using tsio::oprintf;
-
     oprintf("Yearly report for %dQ%d\n%72{-%}\n", year, quarter);
     //                                ^^^^^^^ generate 72 dashes.
 
@@ -305,8 +295,6 @@ static void step6(const ReportData& report, unsigned year, unsigned quarter)
 
 static void withPrintf(const ReportData& report, unsigned year, unsigned quarter)
 {
-    using tsio::oprintf;
-
     oprintf("Yearly report for %dQ%d\n"
             "%72{-%}\n%[%<%5d %-20s%10.2f     %[%6.2f%%%]\n%>%]%72{-%}\n",
             year, quarter, report);
@@ -321,8 +309,6 @@ static void withPrintf(const ReportData& report, unsigned year, unsigned quarter
 
 static void overview(const ReportData& report, unsigned year, unsigned quarter)
 {
-    using tsio::oprintf;
-
     oprintf("Yearly report for %dQ%d\n" // title
             "%72{-%}\n"                 // 72 dashes and a new line
             "%["                        // start report vector
@@ -373,35 +359,35 @@ int main()
 {
     auto report = setUp();
 
-    std::cout << "ostreams:\n\n";
+    oprintf("ostreams:\n\n");
     withOstream(report, 2018, 1);
 
-    std::cout << "\n\n\nstep1:\n\n";
+    oprintf("\n\n\nstep1:\n\n");
     step1(report, 2018, 1);
 
-    std::cout << "\n\n\nstep2:\n\n";
+    oprintf("\n\n\nstep2:\n\n");
     step2(report, 2018, 1);
 
-    std::cout << "\n\n\nstep3:\n\n";
+    oprintf("\n\n\nstep3:\n\n");
     step3(report, 2018, 1);
 
-    std::cout << "\n\n\nstep4:\n\n";
+    oprintf("\n\n\nstep4:\n\n");
     step4(report, 2018, 1);
 
-    std::cout << "\n\n\nstep5:\n\n";
+    oprintf("\n\n\nstep5:\n\n");
     step5(report, 2018, 1);
 
-    std::cout << "\n\n\nstep6:\n\n";
+    oprintf("\n\n\nstep6:\n\n");
     step6(report, 2018, 1);
 
-    std::cout << "\n\n\noprintf:\n\n";
+    oprintf("\n\n\noprintf:\n\n");
     withPrintf(report, 2018, 1);
 
-    std::cout << "\n\n\noverview:\n\n";
+    oprintf("\n\n\noverview:\n\n");
     overview(report, 2018, 1);
 
-    std::cout << "\n\n\nfmt io manipulator:\n\n";
+    oprintf("\n\n\nfmt io manipulator:\n\n");
     withFmt(report, 2018, 1);
 
-    std::cout << "\n\n";
+    oprintf("\n\n");
 }

@@ -27,7 +27,8 @@
  */
 
 #include "tsio.h"
-#include "map"
+#include <map>
+#include <set>
 
 using namespace tsio;
 

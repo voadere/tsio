@@ -30,17 +30,11 @@
 #define FORMATTER_H
 
 #include <array>
-#include <deque>
-#include <forward_list>
 #include <iomanip>
 #include <iostream>
 #include <limits>
-#include <list>
-#include <map>
-#include <set>
 #include <string.h>
 #include <string>
-#include <unordered_set>
 #include <vector>
 
 namespace tsioImplementation
@@ -348,80 +342,8 @@ void printfDetail(Format& format, const T* value)
     }
 }
 
-template <typename T1, typename T2>
-void printfDetail(Format& format, const std::map<T1, T2>& value)
-{
-    for (const auto& v : value) {
-        printfDetail(format, v);
-    };
-}
-
-template <typename T>
-void printfDetail(Format& format, const std::set<T>& value)
-{
-    for (const auto& v : value) {
-        printfDetail(format, v);
-    };
-}
-
-template <typename T>
-void printfDetail(Format& format, const std::multiset<T>& value)
-{
-    for (const auto& v : value) {
-        printfDetail(format, v);
-    };
-}
-
-template <typename T>
-void printfDetail(Format& format, const std::unordered_set<T>& value)
-{
-    for (const auto& v : value) {
-        printfDetail(format, v);
-    };
-}
-
-template <typename T>
-void printfDetail(Format& format, const std::unordered_multiset<T>& value)
-{
-    for (const auto& v : value) {
-        printfDetail(format, v);
-    };
-}
-
-template <typename T>
-void printfDetail(Format& format, const std::deque<T>& value)
-{
-    for (const auto& v : value) {
-        printfDetail(format, v);
-    };
-}
-
-template <typename T>
-void printfDetail(Format& format, const std::list<T>& value)
-{
-    for (const auto& v : value) {
-        printfDetail(format, v);
-    };
-}
-
-template <typename T>
-void printfDetail(Format& format, const std::forward_list<T>& value)
-{
-    for (const auto& v : value) {
-        printfDetail(format, v);
-    };
-}
-
-template <typename T>
-void printfDetail(Format& format, const std::vector<T>& value)
-{
-    for (const auto& v : value) {
-        printfDetail(format, v);
-    };
-}
-
-template <typename T, size_t N>
-void printfDetail(Format& format, const std::array<T, N>& value)
+template <typename T, typename std::enable_if<std::is_class<T>{}, int>::type = 0>
+void printfDetail(Format& format, const T& value)
 {
     for (const auto& v : value) {
         printfDetail(format, v);

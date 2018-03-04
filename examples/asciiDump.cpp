@@ -36,6 +36,11 @@ static void usage(const char* name)
     std::cerr << "Usage: " << name << " [-x | -C] <file name>\n";
 }
 
+/*
+ * This example s based on the feature that a std::string can be formatted
+ * as a string or as a container of characters.
+ */
+
 static void dump(const char* fileName, unsigned format)
 {
     using namespace tsio;
@@ -195,4 +200,8 @@ int main(int argc, char* argv[])
     const char* fileName = argv[optind];
 
     dump(fileName, format);
+
+    if (false) {
+        overview(fileName, format);     // suppress compiler warning
+    }
 }
