@@ -1,0 +1,8 @@
+Import(['compiler'])
+
+examples = ['tsioTest', 'testError']
+
+for name in examples:
+    compiler.Program(name , [name +'.cpp'],
+             LIBS=['tsio'], LIBPATH=['..'],
+             CPPPATH=['.', '..'])
