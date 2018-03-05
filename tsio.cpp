@@ -694,6 +694,21 @@ const char* tsioImplementation::FormatState::unParse() const
     return pt;
 }
 
+void tsioImplementation::Format::showErrorContext(FormatNode* node) const
+{
+    std::cerr << "         at \"" << wholeFormat << "\"\n";
+
+    size_t offset;
+
+    if (node == nullptr) {
+        offset = strlen(wholeFormat);
+    } else {
+        offset = node->format - wholeFormat + node->state.prefixSize;
+    }
+
+    std::cerr << std::setw(offset + 12 + 2) << '^' << std::endl;
+}
+
 tsioImplementation::FormatNode* tsioImplementation::Format::getNode()
 {
     if (chuncks->index == chuncks->chunckSize - 1) {
@@ -705,6 +720,7 @@ tsioImplementation::FormatNode* tsioImplementation::Format::getNode()
 
     auto result = &chuncks->nodes[chuncks->index++];
     result->reset();
+    result->format = format;
     return result;
 }
 
@@ -1162,7 +1178,7 @@ void tsioImplementation::printfDetail(Format& format, long long sValue,
         }
     } else if (spec < 'u') {
         if (spec == 'n') {
-            std::cerr << "TSIO: Did you forget to specify the parameter for '%n' by pointer?" << std::endl;
+            format.error("Did you forget to specify the parameter for '%n' by pointer");
             return;
         }
 
@@ -1218,7 +1234,7 @@ void tsioImplementation::printfDetail(Format& format, long long sValue,
         return;
     }
 
-    std::cerr << "TSIO: Invalid format '" << spec << "' for integeral value" << std::endl;
+    format.error("Invalid format '", spec, "' for integeral value");
 }
 
 void tsioImplementation::printfDetail(Format& format, const std::string& value)
@@ -1251,7 +1267,7 @@ void tsioImplementation::printfDetail(Format& format, const std::string& value)
             break;
 
         default:
-            std::cerr << "TSIO: Invalid format '" << spec << "' for std::string value" << std::endl;
+            format.error("Invalid format '", spec, "' for std::string value");
     }
 }
 
@@ -1347,7 +1363,7 @@ void tsioImplementation::printfDetail(Format& format, double value)
         break;
 
         default:
-            std::cerr << "TSIO: Invalid format '" << spec << "' for floating point value" << std::endl;
+            format.error("Invalid format '", spec, "' for floating point value");
     }
 }
 

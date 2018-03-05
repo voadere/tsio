@@ -169,6 +169,7 @@ struct FormatNode
 {
     FormatNode* next;
     FormatNode* child;
+    const char* format;
     FormatState state;
 
     FormatNode() = default;
@@ -177,6 +178,7 @@ struct FormatNode
     {
         next = nullptr;
         child = nullptr;
+        format = nullptr;
         state.reset();
     }
 };
@@ -191,7 +193,7 @@ struct FormatNodes
 
 struct Format
 {
-    Format(std::string& d, const char* f) : format(f), dest(d)
+    Format(std::string& d, const char* f) : format(f), wholeFormat(f), dest(d)
     {
     }
 
@@ -229,17 +231,88 @@ struct Format
         }
     }
 
+    void showErrorContext(FormatNode* node) const;
+
+#if __cplusplus < 201703L
+    void errorTail()
+    {
+    }
+
+
+    template<typename T, typename... Ts>
+    void errorTail(const T& t, const Ts&... ts)
+    {
+        std::cout << t;
+        errorTail(ts...);
+    }
+
+    template<typename... Ts>
+    void error(const Ts&... ts)
+    {
+        if (!errorGiven) {
+            std::cerr << "TSIO error: ";
+            errorTail(ts...);
+            std::cerr << ".\n";
+            showErrorContext(nextNode);
+
+            errorGiven = true;
+        }
+    }
+
+    template<typename... Ts>
+    void error(FormatNode* node, const Ts&... ts)
+    {
+        if (!errorGiven) {
+            std::cerr << "TSIO error: ";
+            errorTail(ts...);
+            std::cerr << ".\n";
+            showErrorContext(node);
+
+            errorGiven = true;
+        }
+    }
+
+#else
+    template<typename... Ts>
+    void error(const Ts&... ts)
+    {
+        if (!errorGiven) {
+            std::cerr << "TSIO error: ";
+            (std::cerr << ... << ts);
+            std::cerr << ".\n";
+            showErrorContext(nextNode);
+
+            errorGiven = true;
+        }
+    }
+
+    template<typename... Ts>
+    void error(FormatNode* node, const Ts&... ts)
+    {
+        if (!errorGiven) {
+            std::cerr << "TSIO error: ";
+            (std::cerr << ... << ts);
+            std::cerr << ".\n";
+            showErrorContext(node);
+
+            errorGiven = true;
+        }
+    }
+#endif
+
     void getNextNode(bool first = false);
     FormatNode* getNextSibling(FormatNode* node, bool first = false);
     void skipToFormat();
     void tabTo(unsigned column, bool absolute);
 
     const char* format;
+    const char* wholeFormat;
     std::string& dest;
     std::vector<StackElement> stack;
     FormatNode* nextNode = nullptr;
     FormatNodes nodes;
     FormatNodes* chuncks = &nodes;
+    bool errorGiven = false;
 };
 
 void outputString(std::string& dest,
@@ -307,6 +380,9 @@ void printfDetail(Format& format, T* value)
 
         case 'n':
             using baseType = typename std::remove_pointer<T>::type;
+            if (!std::is_integral<baseType>{}) {
+                format.error("Invalid argumenmt type for %n (expected pointer to integral)");
+            }
 
             *value = baseType(dest.size());
 
@@ -353,7 +429,8 @@ void printfDetail(Format& format, const T& value)
 template<std::size_t I = 0, typename... Tp>
 typename std::enable_if<I == sizeof...(Tp), void>::type
 tuplePrintfDetail(Format& format, const std::tuple<Tp...>& value)
-{ }
+{
+}
 
 template<std::size_t I = 0, typename... Tp>
 typename std::enable_if<I < sizeof...(Tp), void>::type
@@ -375,37 +452,67 @@ void printfDetail(Format& format, const std::pair<T1, T2>& value)
     printfDetail(format, std::tuple<T1, T2>(value));
 }
 
-template <typename T, typename enable = void>
-struct ToSpec
+template <typename T, typename std::enable_if<!std::is_integral<T>{}, int>::type = 0>
+int toSpec(Format& format, const T& value)
 {
-    int operator()(const T&)
-    {
-        std::cerr << "TSIO: invalid conversion" << std::endl;
-        return 0;
+    format.error("invalid argument type for '*'");
+    return 0;
+}
+
+template <typename T, typename std::enable_if<std::is_integral<T>{}, int>::type = 0>
+int toSpec(Format& format, const T& value)
+{
+    return int(value);
+}
+
+template <typename T, typename std::enable_if<!std::is_class<T>{} && !std::is_array<T>{}, int>::type = 0>
+void containerDetail(Format& format, const T& value)
+{
+    auto nextNode = format.nextNode;
+    std::string& dest = format.dest;
+
+    auto child = nextNode->child;
+
+    format.nextNode = child;
+    FormatState& state = child->state;
+
+    if (state.prefixSize != 0) {
+        dest.append(state.prefix, state.prefixSize);
     }
-};
 
-template <typename T>
-struct ToSpec<T, typename std::enable_if<std::is_integral<T>::value>::type>
-{
-    int operator()(const T& value)
-    {
-        return int(value);
+    if (state.formatSpecifier == '[') {
+        containerDetail(format, value);
+    } else if (state.formatSpecifier == '<') {
+        tupleDetail(format, value);
+    } else {
+        printfDetail(format, value);
     }
-};
 
-template <typename T, typename enable = void>
-struct ContainerDetail;
+    child = format.getNextSibling(child);
 
+    if (child == nullptr || child->state.formatSpecifier != ']') {
+        format.error(child, "Invalid container format (missing %])");
+    } else if (!(nextNode->state.type & alternative)) {
+        FormatState& state = child->state;
 
-template <typename T>
-struct ContainerDetail<T, typename std::enable_if<!std::is_class<T>::value && !std::is_array<T>::value>::type>
+        if (state.prefixSize != 0) {
+            dest.append(state.prefix, state.prefixSize);
+        }
+    }
+
+    format.nextNode = nextNode;
+}
+
+template <typename T, typename std::enable_if<std::is_class<T>{} || std::is_array<T>{}, int>::type = 0>
+void containerDetail(Format& format, const T& value)
 {
-    void operator()(Format& format, const T& value)
-    {
-        auto nextNode = format.nextNode;
-        std::string& dest = format.dest;
+    auto nextNode = format.nextNode;
+    std::string& dest = format.dest;
 
+    using std::begin;
+    using std::end;
+
+    for (auto b = begin(value), e = end(value); b != e;) {
         auto child = nextNode->child;
 
         format.nextNode = child;
@@ -416,93 +523,36 @@ struct ContainerDetail<T, typename std::enable_if<!std::is_class<T>::value && !s
         }
 
         if (state.formatSpecifier == '[') {
-            containerDetail(format, value);
+            containerDetail(format, *b);
         } else if (state.formatSpecifier == '<') {
-            tupleDetail(format, value);
+            tupleDetail(format, *b);
         } else {
-            printfDetail(format, value);
+            printfDetail(format, *b);
         }
+
+        ++b;
 
         child = format.getNextSibling(child);
 
         if (child == nullptr || child->state.formatSpecifier != ']') {
-            std::cerr << "TSIO: Invalid container format" << std::endl;
-        }
-
-        if (!(nextNode->state.type & alternative)) {
+            format.error(child, "Invalid container format (expected %])");
+        } else if (b != e || !(nextNode->state.type & alternative)) {
             FormatState& state = child->state;
 
             if (state.prefixSize != 0) {
                 dest.append(state.prefix, state.prefixSize);
             }
         }
-
-        format.nextNode = nextNode;
     }
-};
 
-template <typename T>
-struct ContainerDetail<T, typename std::enable_if<std::is_class<T>::value || std::is_array<T>::value>::type>
-{
-    void operator()(Format& format, const T& value)
-    {
-        auto nextNode = format.nextNode;
-        std::string& dest = format.dest;
-
-        using std::begin;
-        using std::end;
-
-        for (auto b = begin(value), e = end(value); b != e;) {
-            auto child = nextNode->child;
-
-            format.nextNode = child;
-            FormatState& state = child->state;
-
-            if (state.prefixSize != 0) {
-                dest.append(state.prefix, state.prefixSize);
-            }
-
-            if (state.formatSpecifier == '[') {
-                containerDetail(format, *b);
-            } else if (state.formatSpecifier == '<') {
-                tupleDetail(format, *b);
-            } else {
-                printfDetail(format, *b);
-            }
-
-            ++b;
-
-            child = format.getNextSibling(child);
-
-            if (child == nullptr || child->state.formatSpecifier != ']') {
-                std::cerr << "TSIO: Invalid container format" << std::endl;
-            }
-
-            if (b != e || !(nextNode->state.type & alternative)) {
-                FormatState& state = child->state;
-
-                if (state.prefixSize != 0) {
-                    dest.append(state.prefix, state.prefixSize);
-                }
-            }
-        }
-
-        format.nextNode = nextNode;
-    }
-};
-
-template <typename T>
-void containerDetail(Format& format, const T& value)
-{
-    ContainerDetail<T> c;
-
-    c(format, value);
+    format.nextNode = nextNode;
 }
 
 template<std::size_t I = 0, typename... Tp>
 typename std::enable_if<I == sizeof...(Tp), void>::type
 tupleContainerDetail(Format& format, const std::tuple<Tp...>& value)
-{ }
+{
+}
 
 template<std::size_t I = 0, typename... Tp>
 typename std::enable_if<I < sizeof...(Tp), void>::type
@@ -531,10 +581,8 @@ tupleContainerDetail(Format& format, const std::tuple<Tp...>& value)
     child = format.getNextSibling(child);
 
     if (child == nullptr || child->state.formatSpecifier != ']') {
-        std::cerr << "TSIO: Invalid container format" << std::endl;
-    }
-
-    if (I != sizeof...(Tp) - 1 || !(nextNode->state.type & alternative)) {
+        format.error(child, "Invalid container format(expected %]");
+    } else if (I != sizeof...(Tp) - 1 || !(nextNode->state.type & alternative)) {
         FormatState& state = child->state;
 
         if (state.prefixSize != 0) {
@@ -561,7 +609,8 @@ void containerDetail(Format& format, const std::pair<T1, T2>& value)
 template<std::size_t I = 0, typename... Tp>
 typename std::enable_if<I == sizeof...(Tp), void>::type
 tupleTupleDetail(Format& format, const std::tuple<Tp...>& value)
-{ }
+{
+}
 
 template<std::size_t I = 0, typename... Tp>
 typename std::enable_if<I < sizeof...(Tp), void>::type
@@ -569,6 +618,12 @@ tupleTupleDetail(Format& format, const std::tuple<Tp...>& value)
 {
     std::string& dest = format.dest;
     auto nextNode = format.nextNode;
+
+    if (nextNode == nullptr) {
+        format.error("missing argument in tuple format");
+        return;
+    }
+
     FormatState& state = nextNode->state;
 
     if (state.prefixSize != 0) {
@@ -599,14 +654,13 @@ void tupleDetail(Format& format, const std::tuple<Ts...>& value)
     auto child = format.getNextSibling(format.nextNode, true);
 
     if (child == nullptr || child->state.formatSpecifier != '>') {
-        std::cerr << "TSIO: Invalid tuple format" << std::endl;
-        return;
-    }
+        format.error("Invalid tuple format (expected %>)");
+    } else {
+        FormatState& state = child->state;
 
-    FormatState& state = child->state;
-
-    if (state.prefixSize != 0) {
-        format.dest.append(state.prefix, state.prefixSize);
+        if (state.prefixSize != 0) {
+            format.dest.append(state.prefix, state.prefixSize);
+        }
     }
 
     format.nextNode = nextNode;
@@ -623,14 +677,13 @@ void tupleDetail(Format& format, const std::pair<T1, T2>& value)
     auto child = format.getNextSibling(format.nextNode, true);
 
     if (child == nullptr || child->state.formatSpecifier != '>') {
-        std::cerr << "TSIO: Invalid tuple format" << std::endl;
-        return;
-    }
+        format.error("Invalid tuple format (expected %>)");
+    } else {
+        FormatState& state = child->state;
 
-    FormatState& state = child->state;
-
-    if (state.prefixSize != 0) {
-        format.dest.append(state.prefix, state.prefixSize);
+        if (state.prefixSize != 0) {
+            format.dest.append(state.prefix, state.prefixSize);
+        }
     }
 
     format.nextNode = nextNode;
@@ -639,26 +692,14 @@ void tupleDetail(Format& format, const std::pair<T1, T2>& value)
 template <typename T>
 void tupleDetail(Format& format, const T& value)
 {
-    auto nextNode = format.nextNode;
-
-    if (nextNode == nullptr) {
-        std::cerr << "TSIO: Invalid tuple format" << std::endl;
-        return;
-    }
-
-    format.nextNode = nextNode->child;
-    tupleDetail(format, value);
-
-    format.nextNode = nextNode;
+    format.error("Invalid argument for tuple format");
 }
 
 template <typename T>
 void printfOne(Format& format, const T& value)
 {
-    ToSpec<T> toSpec;
-
     if (format.nextNode == nullptr && format.stack.empty()) {
-        std::cerr << "TSIO: Extraneous parameter or missing format specifier." << std::endl;
+        format.error("Extraneous parameter or missing format specifier");
         return;
     }
 
@@ -666,13 +707,13 @@ void printfOne(Format& format, const T& value)
 
     if (state.position != 0 || state.widthPosition != 0 ||
             state.precisionPosition != 0) {
-        std::cerr << "TSIO: Positional arguments can not be mixed with sequential arguments." << std::endl;
+        format.error("Positional arguments can not be mixed with sequential arguments");
         return;
     }
 
     if (state.active()) {
         if (state.widthDynamic()) {
-            int spec = toSpec(value);
+            int spec = toSpec(format, value);
 
             if (spec < 0) {
                 state.width = -spec;
@@ -695,7 +736,7 @@ void printfOne(Format& format, const T& value)
         }
 
         if (state.precisionDynamic()) {
-            int spec = toSpec(value);
+            int spec = toSpec(format, value);
 
             if (spec < 0) {
                 state.setPrecisionGiven(false);
@@ -726,9 +767,9 @@ void printfOne(Format& format, const T& value)
 }
 
 #if __cplusplus < 201703L
-inline void printfNth(Format&, size_t)
+inline void printfNth(Format& format, size_t)
 {
-    std::cerr << "TSIO: Invalid position in format." << std::endl;
+    format.error("Invalid position in format");
 }
 
 template <typename T, typename... Ts>
@@ -748,22 +789,20 @@ void printfNth(Format& format, size_t index, const T& value, const Ts&... ts)
         printfNth(format, index - 1, ts...);
     }
 }
-inline void readSpecNum(int& dest, FormatState&, size_t)
+inline void readSpecNum(Format& format, int& dest, size_t)
 {
-    std::cerr << "TSIO: Invalid position in format." << std::endl;
+    format.error("Invalid position in format");
     dest = 0;
 }
 
 template <typename T, typename... Ts>
 
-void readSpecNum(int& dest, FormatState& state, size_t index, const T& value, const Ts&... ts)
+void readSpecNum(Format& format, int& dest, size_t index, const T& value, const Ts&... ts)
 {
-    ToSpec<T> toSpec;
-
     if (index == 1) {
-        dest = toSpec(value);
+        dest = toSpec(format, value);
     } else {
-        readSpecNum(dest, state, index - 1, ts...);
+        readSpecNum(format, dest, index - 1, ts...);
     }
 }
 #else
@@ -787,12 +826,10 @@ void printfNth(Format& format, size_t index, const Ts&... ts)
 }
 
 template <typename T, typename... Ts>
-bool readSpecNumDispatch(int& dest, FormatState& state, size_t index, const T& value, const Ts&... ts)
+bool readSpecNumDispatch(Format& format, int& dest, size_t index, const T& value, const Ts&... ts)
 {
-    ToSpec<T> toSpec;
-
     if (index == 1) {
-        dest = toSpec(value);
+        dest = toSpec(format, value);
         return true;
     } else {
         return false;
@@ -800,11 +837,11 @@ bool readSpecNumDispatch(int& dest, FormatState& state, size_t index, const T& v
 }
 
 template <typename... Ts>
-void readSpecNum(int& dest, FormatState& state, size_t index, const Ts&... ts)
+void readSpecNum(Format& format, int& dest, size_t index, const Ts&... ts)
 {
     auto i = index + 1;
 
-    static_cast<void>(((i--, readSpecNumDispatch(dest, state, i, ts)) || ...));
+    static_cast<void>(((i--, readSpecNumDispatch(format, dest, i, ts)) || ...));
 }
 
 #endif
@@ -824,7 +861,7 @@ void printfPositionalOne(Format& format, const Ts&... ts)
         if (state.widthDynamic()) {
             int spec = 0;
 
-            readSpecNum(spec, state, state.widthPosition, ts...);
+            readSpecNum(format, spec, state.widthPosition, ts...);
 
             if (spec < 0) {
                 state.width = -spec;
@@ -849,7 +886,7 @@ void printfPositionalOne(Format& format, const Ts&... ts)
         if (state.precisionDynamic()) {
             int spec = 0;
 
-            readSpecNum(spec, state, state.precisionPosition, ts...);
+            readSpecNum(format, spec, state.precisionPosition, ts...);
 
             if (spec < 0) {
                 state.setPrecisionGiven(false);
@@ -865,7 +902,7 @@ void printfPositionalOne(Format& format, const Ts&... ts)
     }
 
     if (state.position == 0) {
-        std::cerr << "TSIO: Positional arguments can not be mixed with sequential arguments." << std::endl;
+        format.error("Positional arguments can not be mixed with sequential arguments");
         format.getNextNode();
         return;
     }
@@ -919,7 +956,7 @@ void addsprintf(std::string& dest, const char* f, const Ts&... ts)
 
         if (format.nextNode != nullptr) {
             if (format.nextNode->state.formatSpecifier != 0) {
-                std::cerr << "TSIO: Extraneous format." << std::endl;
+                format.error("Extraneous format");
             }
         }
     }
