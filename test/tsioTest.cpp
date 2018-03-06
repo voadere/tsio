@@ -298,6 +298,11 @@ static void testRepeatingFormats()
     expect("prefix ****  333 333 333 !!", text);
 }
 
+static void testBinaryFormat() {
+    std::string text = fstring("%b %#b %B %#B", 2, 1234, 99, 9876);
+    expect("10 0b10011010010 1100011 0B10011010010100", text);
+}
+
 static void extensions()
 {
     std::string text = fstring("%C %C", '\x12', 'a');
@@ -462,6 +467,7 @@ static void run()
     testPrintfN();
     testPrintString();
     testRepeatingFormats();
+    testBinaryFormat();
     testPositional();
     extensions();
 }

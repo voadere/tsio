@@ -50,14 +50,16 @@ TSIO_NEVER_INLINE void tsioImplementation::String::resize(size_t newSize)
     mLen = newLen;
 }
 
-void tsioImplementation::outputString(String& dest,
-                                      const char* text,
-                                      size_t s,
-                                      int minSize,
-                                      int maxSize,
-                                      unsigned type,
-                                      char fillCharacter)
+static void outputString(tsioImplementation::String& dest,
+                         const char* text,
+                         size_t s,
+                         int minSize,
+                         int maxSize,
+                         unsigned type,
+                         char fillCharacter)
 {
+    using namespace tsioImplementation;
+
     if (text == nullptr) {
         return;
     }
@@ -178,24 +180,31 @@ void tsioImplementation::outputString(String& dest,
     }
 }
 
-void tsioImplementation::outputNumber(String& dest,
-                                      long long pNumber,
-                                      int base,
-                                      int size,
-                                      int precision,
-                                      unsigned type,
-                                      char fillCharacter)
+inline void outputString(tsioImplementation::String& dest,
+                         const char* text,
+                         int minSize,
+                         int maxSize,
+                         unsigned type,
+                         char fillCharacter)
 {
-    unsigned long long number;
-    const size_t bufSize = 134; // allow for 128 binary digits plus radix indicator and sign
-    char buf[bufSize * 2];
-    char prefix[4];
+    outputString(dest, text, strlen(text), minSize, maxSize, type, fillCharacter);
+}
+
+template <int base, bool isSigned = false>
+static void outputNumber(tsioImplementation::String& dest,
+                         long long pNumber,
+                         int size,
+                         int precision,
+                         unsigned type,
+                         char fillCharacter)
+{
+    using namespace tsioImplementation;
+
+    unsigned long long number = pNumber;;
     size_t prefixSize = 0;
-    const char* digitPairs = "0001020304050607080910111213141516171819"
-                             "2021222324252627282930313233343536373839"
-                             "4041424344454647484950515253545556575859"
-                             "6061626364656667686970717273747576777879"
-                             "8081828384858687888990919293949596979899";
+    char prefix[4];
+    const size_t bufSize = 134; // allow for 128 binary digits plus radix indicator and sign
+    char buf[bufSize];
 
     if (precision < 0) {
         precision = 0;
@@ -204,9 +213,7 @@ void tsioImplementation::outputNumber(String& dest,
     char* actualPointer = buf + bufSize;
     char* precisionPointer = actualPointer - precision;
 
-    number = pNumber;
-
-    if (type & signedNumber) {
+    if (isSigned) {
         if (pNumber < 0) {
             prefix[prefixSize++] = '-';
             number = -pNumber;
@@ -276,7 +283,13 @@ void tsioImplementation::outputNumber(String& dest,
 
             break;
 
-            case 10:
+            case 10: {
+                const char* digitPairs = "0001020304050607080910111213141516171819"
+                                         "2021222324252627282930313233343536373839"
+                                         "4041424344454647484950515253545556575859"
+                                         "6061626364656667686970717273747576777879"
+                                         "8081828384858687888990919293949596979899";
+
                 while (unsigned(number) != number) {
                     unsigned long long q = number / 100;
                     unsigned long long r = (number % 100) * 2;
@@ -313,6 +326,7 @@ void tsioImplementation::outputNumber(String& dest,
                 }
 
                 break;
+            }
         }
     } else {
         /// This is a hack to overcome an inconsistency between '%.x' and '%.o' formatting.
@@ -325,10 +339,7 @@ void tsioImplementation::outputNumber(String& dest,
     auto bytesNeeded = actualDigits + prefixSize;
 
     if (size_t(size) <= bytesNeeded) {
-        if (prefixSize != 0) {
-            dest.append(prefix, prefixSize);
-        }
-
+        dest.append(prefix, prefixSize);
         dest.append(actualPointer, actualDigits);
     } else {
         char fillChar = (type & (alfafill | numericfill)) ? fillCharacter : ' ';
@@ -363,9 +374,19 @@ void tsioImplementation::outputNumber(String& dest,
     }
 }
 
+void tsioImplementation::outputPointer(String& dest,
+                                       uintptr_t pNumber,
+                                       int size,
+                                       int precision,
+                                       unsigned type,
+                                       char fillCharacter)
+{
+    outputNumber<16>(dest, pNumber, size, precision, type | alternative, fillCharacter);
+}
+
 static bool isValidFormatSpecifier(unsigned c)
 {
-    switch(c) {
+    switch (c) {
         case '%':
         case '(':
         case ')':
@@ -716,15 +737,13 @@ tsioImplementation::FormatNode* tsioImplementation::Format::buildTree(bool& posi
                 positional = true;
             }
 
-            if (state.formatSpecifier == '}' || 
-                    state.formatSpecifier == ']' ||
-                    state.formatSpecifier == '>') {
+            if (state.formatSpecifier == '}' || state.formatSpecifier == ']' ||
+                state.formatSpecifier == '>') {
                 break;
             }
 
-            if (state.formatSpecifier == '{' || 
-                    state.formatSpecifier == '[' ||
-                    state.formatSpecifier == '<') {
+            if (state.formatSpecifier == '{' || state.formatSpecifier == '[' ||
+                state.formatSpecifier == '<') {
                 node->child = buildTree(positional);
             }
         }
@@ -762,8 +781,7 @@ void tsioImplementation::Format::tabTo(unsigned column, bool absolute)
     }
 }
 
-tsioImplementation::FormatNode* tsioImplementation::Format::getNextSibling(
-        FormatNode* node, bool first)
+tsioImplementation::FormatNode* tsioImplementation::Format::getNextSibling(FormatNode* node, bool first)
 {
     if (node == nullptr) {
         return node;
@@ -1046,8 +1064,10 @@ std::ostream& tsio::fmt::operator()(std::ostream& out) const
     return out;
 }
 
-void tsioImplementation::printfDetail(Format& format, long long sValue,
-        unsigned long long uValue, bool isSigned)
+void tsioImplementation::printfDetail(Format& format,
+                                      long long sValue,
+                                      unsigned long long uValue,
+                                      bool isSigned)
 {
     FormatState& state = format.nextNode->state;
     auto& dest = format.dest;
@@ -1063,13 +1083,8 @@ void tsioImplementation::printfDetail(Format& format, long long sValue,
 
     // let's favor the most used %d format
     if (spec == 'd' || spec == 'i') {
-        outputNumber(dest,
-                sValue,
-                10,
-                state.width,
-                state.precisionGiven() ? state.precision : 1,
-                type | signedNumber,
-                fillCharacter);
+        outputNumber<10, true>(
+                dest, sValue, state.width, state.precisionGiven() ? state.precision : 1, type, fillCharacter);
         return;
     }
 
@@ -1077,45 +1092,48 @@ void tsioImplementation::printfDetail(Format& format, long long sValue,
     if (spec < 'n') {
         if (spec < 'b') {
             if (spec == 'X') {
-                outputNumber(dest,
-                        uValue,
-                        16,
-                        state.width,
-                        state.precisionGiven() ? state.precision : 1,
-                        type | upcase,
-                        fillCharacter);
+                outputNumber<16>(dest,
+                                 uValue,
+                                 state.width,
+                                 state.precisionGiven() ? state.precision : 1,
+                                 type | upcase,
+                                 fillCharacter);
+                return;
+            }
+
+            if (spec == 'B') {
+                outputNumber<2>(dest, uValue, state.width, state.precision, type | upcase, fillCharacter);
                 return;
             }
 
             if (spec == 'C') {
                 char c = char(sValue);
                 outputString(dest,
-                        &c,
-                        1,
-                        state.width,
-                        state.precisionGiven() ? (state.precision > 0 ? state.precision : 1)
-                        : std::numeric_limits<int>::max(),
-                        type | nice,
-                        fillCharacter);
+                             &c,
+                             1,
+                             state.width,
+                             state.precisionGiven() ? (state.precision > 0 ? state.precision : 1)
+                                                    : std::numeric_limits<int>::max(),
+                             type | nice,
+                             fillCharacter);
                 return;
             }
         } else {
             if (spec == 'b') {
-                outputNumber(dest, uValue, 2, state.width, state.precision,
-                        type, fillCharacter);
+                outputNumber<2>(dest, uValue, state.width, state.precision, type, fillCharacter);
                 return;
             }
 
             if (spec == 'c') {
                 char c = char(sValue);
                 outputString(dest,
-                        &c,
-                        1,
-                        state.width,
-                        state.precisionGiven() ? (state.precision > 0 ? state.precision : 1)
-                        : std::numeric_limits<int>::max(),
-                        type,
-                        fillCharacter);
+                             &c,
+                             1,
+                             state.width,
+                             state.precisionGiven() ? (state.precision > 0 ? state.precision : 1)
+                                                    : std::numeric_limits<int>::max(),
+                             type,
+                             fillCharacter);
                 return;
             }
         }
@@ -1126,54 +1144,41 @@ void tsioImplementation::printfDetail(Format& format, long long sValue,
         }
 
         if (spec == 'o') {
-            outputNumber(dest,
-                         uValue,
-                         8,
-                         state.width,
-                         state.precisionGiven() ? state.precision : 1,
-                         type,
-                         fillCharacter);
+            outputNumber<8>(dest,
+                            uValue,
+                            state.width,
+                            state.precisionGiven() ? state.precision : 1,
+                            type,
+                            fillCharacter);
             return;
         }
 
         if (spec == 's') {
             if (isSigned) {
-                outputNumber(dest,
-                             sValue,
-                             10,
-                             state.width,
-                             state.precisionGiven() ? state.precision : 1,
-                             type | signedNumber,
-                             fillCharacter);
+                outputNumber<10, true>(dest,
+                                       sValue,
+                                       state.width,
+                                       state.precisionGiven() ? state.precision : 1,
+                                       type,
+                                       fillCharacter);
             } else {
-                outputNumber(dest,
-                             uValue,
-                             10,
-                             state.width,
-                             state.precisionGiven() ? state.precision : 1,
-                             type,
-                             fillCharacter);
+                outputNumber<10>(dest,
+                                 uValue,
+                                 state.width,
+                                 state.precisionGiven() ? state.precision : 1,
+                                 type,
+                                 fillCharacter);
             }
 
             return;
         }
     } else if (spec == 'u') {
-        outputNumber(dest,
-                uValue,
-                10,
-                state.width,
-                state.precisionGiven() ? state.precision : 1,
-                type,
-                fillCharacter);
+        outputNumber<10>(
+                dest, uValue, state.width, state.precisionGiven() ? state.precision : 1, type, fillCharacter);
         return;
     } else if (spec == 'x') {
-        outputNumber(dest,
-                uValue,
-                16,
-                state.width,
-                state.precisionGiven() ? state.precision : 1,
-                type,
-                fillCharacter);
+        outputNumber<16>(
+                dest, uValue, state.width, state.precisionGiven() ? state.precision : 1, type, fillCharacter);
         return;
     }
 
@@ -1223,13 +1228,7 @@ void tsioImplementation::printfDetail(Format& format, const char* value)
 
     switch (spec) {
         case 'p':
-            outputNumber(dest,
-                         pValue,
-                         16,
-                         state.width,
-                         state.precision,
-                         state.type | alternative,
-                         state.fillCharacter);
+            outputPointer(dest, pValue, state.width, state.precision, state.type, state.fillCharacter);
 
             break;
 
@@ -1327,4 +1326,3 @@ void tsioImplementation::printfDetail(Format& format, bool value)
         printfDetail(format, static_cast<long long>(value));
     }
 }
-

@@ -51,8 +51,7 @@ namespace tsioImplementation
 enum TypeEnum {
     numericfill = 1,
     alfafill = numericfill << 1,
-    signedNumber = alfafill << 1,
-    plusIfPositive = signedNumber << 1,
+    plusIfPositive = alfafill << 1,
     spaceIfPositive = plusIfPositive << 1,
     leftJustify = spaceIfPositive << 1,
     centerJustify = leftJustify << 1,
@@ -444,31 +443,12 @@ struct Format
     String dest;
 };
 
-void outputString(String& dest,
-                  const char* text,
-                  size_t size,
-                  int minSize,
-                  int maxSize,
-                  unsigned type,
-                  char fillCharacter);
-
-inline void outputString(String& dest,
-                         const char* text,
-                         int minSize,
-                         int maxSize,
-                         unsigned type,
-                         char fillCharacter)
-{
-    outputString(dest, text, strlen(text), minSize, maxSize, type, fillCharacter);
-}
-
-void outputNumber(String& dest,
-                  long long pNumber,
-                  int base,
-                  int size,
-                  int precision,
-                  unsigned type,
-                  char fillCharacter);
+void outputPointer(String& dest,
+                   uintptr_t pNumber,
+                   int size,
+                   int precision,
+                   unsigned type,
+                   char fillCharacter);
 
 void printfDetail(Format& format, const std::string& value);
 void printfDetail(Format& format, const char* value);
@@ -497,12 +477,11 @@ void printfDetail(Format& format, T* value)
 
     switch (spec) {
         case 'p':
-            outputNumber(dest,
+            outputPointer(dest,
                          pValue,
-                         16,
                          state.width,
                          state.precision,
-                         state.type | alternative,
+                         state.type,
                          state.fillCharacter);
 
             break;
@@ -532,12 +511,11 @@ void printfDetail(Format& format, const T* value)
 
     switch (spec) {
         case 'p':
-            outputNumber(dest,
+            outputPointer(dest,
                          pValue,
-                         16,
                          state.width,
                          state.precision,
-                         state.type | alternative,
+                         state.type,
                          state.fillCharacter);
 
             break;
