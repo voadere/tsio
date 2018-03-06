@@ -235,7 +235,7 @@ static void testPrintfN()
     sprintf(text, "Hello ");
     addsprintf(text, "World%n!", &sSize);
     expect("Hello World!", text);
-    expect(11, sSize);
+    expect(5, sSize);
 }
 
 static void testPrintString()

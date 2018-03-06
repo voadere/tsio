@@ -29,57 +29,28 @@
 #include "tsio.h"
 #include <time.h>
 
-#if defined(_MSC_VER)
-#define ALWAYS_INLINE __forceinline
-#else
-#define ALWAYS_INLINE __attribute__((always_inline))
-#endif
-
-static ALWAYS_INLINE void copy(char* dest, const char* src, unsigned size)
+TSIO_NEVER_INLINE void tsioImplementation::String::resize(size_t newSize)
 {
-    switch (size) {
-        case 4:
-            dest[3] = src[3];
-            // Fallthru
-        case 3:
-            dest[2] = src[2];
-            // Fallthru
-        case 2:
-            dest[1] = src[1];
-            // Fallthru
-        case 1:
-            dest[0] = src[0];
-            // Fallthru
-        case 0:
-            return;
-        default:
-            memcpy(dest, src, size);
+    size_t newLen = mLen;
+
+    while (newLen < newSize) {
+        newLen += newLen / 2;
     }
+
+    newLen = (newLen & (~7)) + 7;
+
+    if (mData == mShortData) {
+        mData = static_cast<char*>(malloc(newLen + 1));
+
+        std::copy(mShortData, mShortData + mEod + 1, mData);
+    } else {
+        mData = static_cast<char*>(realloc(mData, newLen + 1));
+    }
+
+    mLen = newLen;
 }
 
-static ALWAYS_INLINE void fill(char* dest, char c, unsigned size)
-{
-    switch (size) {
-        case 4:
-            dest[3] = c;
-            // Fallthru
-        case 3:
-            dest[2] = c;
-            // Fallthru
-        case 2:
-            dest[1] = c;
-            // Fallthru
-        case 1:
-            dest[0] = c;
-            // Fallthru
-        case 0:
-            return;
-        default:
-            memset(dest, c, size);
-    }
-}
-
-void tsioImplementation::outputString(std::string& dest,
+void tsioImplementation::outputString(String& dest,
                                       const char* text,
                                       size_t s,
                                       int minSize,
@@ -172,8 +143,6 @@ void tsioImplementation::outputString(std::string& dest,
         size = tmp.size();
     }
 
-    int cnt = 0;
-
     if (size > maxSize) {
         size = maxSize;
     }
@@ -186,26 +155,30 @@ void tsioImplementation::outputString(std::string& dest,
         }
 
         size_t destSize = dest.size();
+        size_t fillSize = minSize - size;
 
-        dest.append(minSize, fillCharacter);
+        dest.widen(minSize);
 
-        char* pt = &dest[destSize];
+        char* pt = dest.data() + destSize;
 
         if (type & leftJustify) {
-            copy(pt, text, size);
+            pt = copy(pt, text, size);
+            fill(pt, fillCharacter, fillSize);
         } else if (type & centerJustify) {
-            size_t offset = (minSize - cnt - size) / 2;
+            size_t offset = fillSize / 2;
+            size_t rest = minSize - offset;
 
-            copy(pt + offset, text, size);
+            pt = fill(pt, fillCharacter, offset);
+            pt = copy(pt, text, size);
+            fill(pt, fillCharacter, rest);
         } else {
-            size_t offset = minSize - size;
-
-            copy(pt + offset, text, size);
+            pt = fill(pt, fillCharacter, fillSize);
+            copy(pt, text, size);
         }
     }
 }
 
-void tsioImplementation::outputNumber(std::string& dest,
+void tsioImplementation::outputNumber(String& dest,
                                       long long pNumber,
                                       int base,
                                       int size,
@@ -359,56 +332,33 @@ void tsioImplementation::outputNumber(std::string& dest,
         dest.append(actualPointer, actualDigits);
     } else {
         char fillChar = (type & (alfafill | numericfill)) ? fillCharacter : ' ';
-        if (bytesNeeded < bufSize) {
-            char* pt;
+        size_t destSize = dest.size();
+        size_t fillSize = size - bytesNeeded;
 
-            if (type & leftJustify) {
-                pt = actualPointer - prefixSize;
+        dest.widen(size);
 
-                copy(pt, prefix, prefixSize);
-                fill(buf + bufSize, fillChar, size - bytesNeeded);
-            } else if (type & centerJustify) {
-                size_t offset = (size - bytesNeeded) / 2;
-                pt = actualPointer - prefixSize - offset;
+        char* pt = dest.data() + destSize;
 
-                copy(actualPointer - prefixSize, prefix, prefixSize);
-                fill(pt, fillChar, offset);
-                fill(buf + bufSize, fillChar, (size - bytesNeeded) - offset);
-            } else if (type & numericfill) {
-                pt = buf + bufSize - size;
+        if (type & leftJustify) {
+            pt = copy(pt, prefix, prefixSize);
+            pt = copy(pt, actualPointer, actualDigits);
+            fill(pt, fillChar, fillSize);
+        } else if (type & centerJustify) {
+            size_t offset = fillSize / 2;
+            size_t rest = size - offset;
 
-                copy(pt, prefix, prefixSize);
-                fill(pt + prefixSize, fillChar, size - bytesNeeded);
-            } else {
-                pt = buf + bufSize - size;
-
-                copy(actualPointer - prefixSize, prefix, prefixSize);
-                fill(pt, fillChar, size - bytesNeeded);
-            }
-
-            dest.append(pt, size);
+            pt = fill(pt, fillChar, offset);
+            pt = copy(pt, prefix, prefixSize);
+            pt = copy(pt, actualPointer, actualDigits);
+            fill(pt, fillChar, rest);
+        } else if (type & numericfill) {
+            pt = copy(pt, prefix, prefixSize);
+            pt = fill(pt, fillChar, fillSize);
+            copy(pt, actualPointer, actualDigits);
         } else {
-            size_t destSize = dest.size();
-
-            dest.append(size, fillChar);
-
-            char* pt = &dest[destSize];
-
-            if (type & leftJustify) {
-                copy(pt, prefix, prefixSize);
-                copy(pt + prefixSize, actualPointer, actualDigits);
-            } else if (type & centerJustify) {
-                size_t offset = (size - bytesNeeded) / 2;
-
-                copy(pt + prefixSize, prefix, prefixSize);
-                copy(pt + offset + prefixSize, actualPointer, bytesNeeded);
-            } else if (type & numericfill) {
-                copy(pt, prefix, prefixSize);
-                copy(pt + size - actualDigits, actualPointer, actualDigits);
-            } else {
-                copy( pt + size - bytesNeeded, prefix, prefixSize);
-                copy( pt + size - actualDigits, actualPointer, actualDigits);
-            }
+            pt = fill(pt, fillChar, fillSize);
+            pt = copy(pt, prefix, prefixSize);
+            copy(pt, actualPointer, actualDigits);
         }
     }
 }
@@ -416,6 +366,7 @@ void tsioImplementation::outputNumber(std::string& dest,
 static bool isValidFormatSpecifier(unsigned c)
 {
     switch(c) {
+        case '%':
         case '(':
         case ')':
         case '<':
@@ -427,6 +378,7 @@ static bool isValidFormatSpecifier(unsigned c)
         case 'F':
         case 'G':
         case 'S':
+        case 'T':
         case 'X':
         case '[':
         case ']':
@@ -547,7 +499,6 @@ void tsioImplementation::FormatState::parse(const char*& f)
         if (ch == '*') {
             setWidthDynamic();
             setWidthGiven();
-            setActive();
             ch = *(format++);
 
             if (unsigned(ch - '0') < 9) {
@@ -583,7 +534,6 @@ void tsioImplementation::FormatState::parse(const char*& f)
 
         if (ch == '*') {
             setPrecisionDynamic();
-            setActive();
             ch = *(format++);
 
             if (unsigned(ch - '0') < 9) {
@@ -760,23 +710,23 @@ tsioImplementation::FormatNode* tsioImplementation::Format::buildTree(bool& posi
             state.prefixSize = unsigned(format - state.prefix);
         } else {
             state.prefixSize = unsigned(format - state.prefix - 1);
-        }
 
-        state.parse(format);
-        if (state.position != 0 || state.widthPosition != 0 || state.precisionPosition != 0) {
-            positional = true;
-        }
+            state.parse(format);
+            if (state.position != 0 || state.widthPosition != 0 || state.precisionPosition != 0) {
+                positional = true;
+            }
 
-        if (state.formatSpecifier == '}' || 
-            state.formatSpecifier == ']' ||
-            state.formatSpecifier == '>') {
-            break;
-        }
+            if (state.formatSpecifier == '}' || 
+                    state.formatSpecifier == ']' ||
+                    state.formatSpecifier == '>') {
+                break;
+            }
 
-        if (state.formatSpecifier == '{' || 
-            state.formatSpecifier == '[' ||
-            state.formatSpecifier == '<') {
-            node->child = buildTree(positional);
+            if (state.formatSpecifier == '{' || 
+                    state.formatSpecifier == '[' ||
+                    state.formatSpecifier == '<') {
+                node->child = buildTree(positional);
+            }
         }
     }
 
@@ -785,8 +735,13 @@ tsioImplementation::FormatNode* tsioImplementation::Format::buildTree(bool& posi
 
 void tsioImplementation::Format::tabTo(unsigned column, bool absolute)
 {
-    size_t pos = dest.find_last_of('\n');
-    size_t currentColumn = (pos == std::string::npos) ? dest.size() : (dest.size() - pos - 1);
+    const char* nlPointer = dest.data() + dest.size();
+
+    while (nlPointer > dest.data() && nlPointer[-1] != '\n') {
+        --nlPointer;
+    }
+
+    size_t currentColumn = dest.data() + dest.size() - nlPointer;
 
     if (absolute) {
         column--;
@@ -879,23 +834,27 @@ void tsioImplementation::Format::getNextNode(bool first)
     }
 
     for (;;) {
-        while (nextNode == nullptr && !stack.empty()) {
-            auto& element = stack.back();
+        while (nextNode == nullptr) {
+            if (!stack.empty()) {
+                auto& element = stack.back();
 
-            if ((element.count--) == 0) {
-                nextNode = element.node->next;
-                stack.pop_back();
+                if ((element.count--) == 0) {
+                    nextNode = element.node->next;
+                    stack.pop_back();
+                } else {
+                    nextNode = element.node->child;
+                }
             } else {
-                nextNode = element.node->child;
+                return;
             }
-        }
-
-        if (nextNode == nullptr || nextNode->state.active()) {
-            return;
         }
 
         FormatState& state = nextNode->state;
         auto spec = state.formatSpecifier;
+
+        if (state.active()) {
+            return;
+        }
 
         if (spec == '%') {
             if (nextNode->state.prefixSize != 0) {
@@ -904,18 +863,10 @@ void tsioImplementation::Format::getNextNode(bool first)
 
             dest.push_back('%');
             nextNode = nextNode->next;
-
-            continue;
-        }
-
-        if (spec == 'T') {
+        } else if (spec == 'T') {
             tabTo(state.width, state.type & alternative);
             nextNode = nextNode->next;
-
-            continue;
-        }
-
-        if (spec == '{') {
+        } else if (spec == '{') {
             if (nextNode->state.prefixSize != 0) {
                 dest.append(nextNode->state.prefix, nextNode->state.prefixSize);
             }
@@ -928,27 +879,19 @@ void tsioImplementation::Format::getNextNode(bool first)
                 }
 
                 nextNode = nextNode->next;
-
-                continue;
+            } else {
+                push(state.width);
+                nextNode = child;
             }
-
-            push(state.width);
-            nextNode = child;
-
-            continue;
-        }
-
-        if (spec == '}' || spec == 0) {
+        } else if (spec == '}' || spec == 0) {
             if (nextNode->state.prefixSize != 0) {
                 dest.append(nextNode->state.prefix, nextNode->state.prefixSize);
             }
 
             nextNode = nextNode->next;
-
-            continue;
+        } else {
+            break;
         }
-
-        break;
     }
 }
 
@@ -1107,7 +1050,7 @@ void tsioImplementation::printfDetail(Format& format, long long sValue,
         unsigned long long uValue, bool isSigned)
 {
     FormatState& state = format.nextNode->state;
-    std::string& dest = format.dest;
+    auto& dest = format.dest;
     char spec = state.formatSpecifier;
     char fillCharacter = state.fillCharacter;
 
@@ -1240,7 +1183,7 @@ void tsioImplementation::printfDetail(Format& format, long long sValue,
 void tsioImplementation::printfDetail(Format& format, const std::string& value)
 {
     FormatState& state = format.nextNode->state;
-    std::string& dest = format.dest;
+    auto& dest = format.dest;
     char spec = state.formatSpecifier;
 
     switch (spec) {
@@ -1274,7 +1217,7 @@ void tsioImplementation::printfDetail(Format& format, const std::string& value)
 void tsioImplementation::printfDetail(Format& format, const char* value)
 {
     FormatState& state = format.nextNode->state;
-    std::string& dest = format.dest;
+    auto& dest = format.dest;
     char spec = state.formatSpecifier;
     uintptr_t pValue = uintptr_t(value);
 
@@ -1318,7 +1261,7 @@ void tsioImplementation::printfDetail(Format& format, const char* value)
 void tsioImplementation::printfDetail(Format& format, double value)
 {
     FormatState& state = format.nextNode->state;
-    std::string& dest = format.dest;
+    auto& dest = format.dest;
     char spec = state.formatSpecifier;
 
     switch (spec) {

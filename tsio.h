@@ -33,9 +33,18 @@
 #include <iomanip>
 #include <iostream>
 #include <limits>
+#include <malloc.h>
 #include <string.h>
 #include <string>
 #include <vector>
+
+#if defined(_MSC_VER)
+#define TSIO_ALWAYS_INLINE __forceinline
+#define TSIO_NEVER_INLINE __declspec(noinline)
+#else
+#define TSIO_ALWAYS_INLINE __attribute__((always_inline))
+#define TSIO_NEVER_INLINE __attribute__ ((noinline))
+#endif
 
 namespace tsioImplementation
 {
@@ -53,26 +62,140 @@ enum TypeEnum {
     widthDynamic = nice << 1,
     precisionDynamic = widthDynamic << 1,
     widthGiven = precisionDynamic << 1,
-    precisionGiven = widthGiven << 1,
-    active = precisionGiven << 1
+    precisionGiven = widthGiven << 1
+};
+
+static_assert(precisionGiven < 1 << 16, "TypeEnum is larger than unsigned short");
+
+inline TSIO_ALWAYS_INLINE char* copy(char* dest, const char* src, unsigned count)
+{
+    if (count < 2) {
+        if (count == 1) {
+            dest[0] = src[0];
+        }
+    } else if (count < 5) {
+        dest[0] = src[0];
+        dest[1] = src[1];
+
+        if (count == 3) {
+            dest[2] = src[2];
+        } else {
+            dest[2] = src[2];
+            dest[3] = src[3];
+        }
+    } else {
+        memcpy(dest, src, count);
+    }
+
+    return dest + count;
+}
+
+inline TSIO_ALWAYS_INLINE char* fill(char* dest, char c, unsigned count)
+{
+    if (count < 2) {
+        if (count == 1) {
+            dest[0] = c;
+        }
+    } else if (count < 5) {
+        dest[0] = c;
+        dest[1] = c;
+
+        if (count == 3) {
+            dest[2] = c;
+        } else {
+            dest[2] = c;
+            dest[3] = c;
+        }
+    } else {
+        memset(dest, c, count);
+    }
+
+    return dest + count;
+}
+
+class String
+{
+    public:
+        String() {
+            *mShortData = 0;
+        }
+
+        ~String() {
+            if (mData != mShortData) {
+                free(mData);
+            }
+        }
+
+        size_t size() const {
+            return mEod;
+        }
+
+        char* data() const
+        {
+            return mData;
+        }
+
+        void widen(size_t count)
+        {
+            if (count > 0) {
+                if (mEod + count >= mLen) {
+                    resize(mEod + count + 1);
+                }
+
+                mEod += count;
+                mData[mEod] = 0;
+            }
+        }
+
+        void append(const char* value, size_t count)
+        {
+            if (count > 0) {
+                if (mEod + count >= mLen) {
+                    resize(mEod + count + 1);
+                }
+
+                copy(mData + mEod, value, count);
+                mEod += count;
+                mData[mEod] = 0;
+            }
+        }
+
+        void append(size_t count, char value)
+        {
+            if (count > 0) {
+                if (mEod + count >= mLen) {
+                    resize(mEod + count + 1);
+                }
+
+                fill(mData + mEod, value, count);
+                mEod += count;
+                mData[mEod] = 0;
+            }
+        }
+
+        void push_back(char value)
+        {
+            if (mEod + 1 >= mLen) {
+                resize(mEod + 1 + 1);
+            }
+
+            mData[mEod++] = value;
+            mData[mEod] = 0;
+        }
+
+    private:
+        void resize(size_t newSize);
+
+        static const size_t shortSize = 1024;
+        size_t mLen = shortSize - 1;
+        size_t mEod = 0;
+        char*  mData = mShortData;
+        char   mShortData[shortSize];
+
 };
 
 struct FormatState
 {
-    const char* prefix;
-    const char* suffix;
-    unsigned width;
-    unsigned precision;
-    unsigned position;
-    unsigned widthPosition;
-    unsigned precisionPosition;
-    unsigned prefixSize;
-    unsigned short type;
-    char formatSpecifier;
-    char fillCharacter;
-
-    mutable char buf[31]; // enough for 5 flags, 2 ints, a dot and a specifier.
-
     FormatState() = default;
 
     void parse(const char*& format);
@@ -101,7 +224,7 @@ struct FormatState
 
     bool active() const
     {
-        return type & TypeEnum::active;
+        return type & (TypeEnum::widthDynamic | TypeEnum::precisionDynamic);
     }
 
     void setWidthGiven(bool v = true)
@@ -140,38 +263,38 @@ struct FormatState
         }
     }
 
-    void setActive(bool v = true)
-    {
-        if (v) {
-            type |= TypeEnum::active;
-        } else {
-            type &= ~TypeEnum::active;
-        }
-    }
-
     void reset()
     {
         prefix = nullptr;
         suffix = nullptr;
+        type = 0;
         width = 0;
         precision = 0;
         position = 0;
         widthPosition = 0;
         precisionPosition = 0;
         prefixSize = 0;
-        type = 0;
         formatSpecifier = 0;
         fillCharacter = ' ';
     }
+
+    const char* prefix;
+    const char* suffix;
+    unsigned short type;
+    unsigned width;
+    unsigned precision;
+    unsigned position;
+    unsigned widthPosition;
+    unsigned precisionPosition;
+    unsigned prefixSize;
+    char formatSpecifier;
+    char fillCharacter;
+
+    mutable char buf[32]; // enough for 5 flags, 2 ints, a dot and a specifier.
 };
 
 struct FormatNode
 {
-    FormatNode* next;
-    FormatNode* child;
-    const char* format;
-    FormatState state;
-
     FormatNode() = default;
 
     void reset()
@@ -181,6 +304,11 @@ struct FormatNode
         format = nullptr;
         state.reset();
     }
+
+    FormatNode* next;
+    FormatNode* child;
+    const char* format;
+    FormatState state;
 };
 
 struct FormatNodes
@@ -193,7 +321,8 @@ struct FormatNodes
 
 struct Format
 {
-    Format(std::string& d, const char* f) : format(f), wholeFormat(f), dest(d)
+    Format(const char* f)
+        : format(f), wholeFormat(f)
     {
     }
 
@@ -307,15 +436,15 @@ struct Format
 
     const char* format;
     const char* wholeFormat;
-    std::string& dest;
     std::vector<StackElement> stack;
     FormatNode* nextNode = nullptr;
     FormatNodes nodes;
     FormatNodes* chuncks = &nodes;
     bool errorGiven = false;
+    String dest;
 };
 
-void outputString(std::string& dest,
+void outputString(String& dest,
                   const char* text,
                   size_t size,
                   int minSize,
@@ -323,7 +452,7 @@ void outputString(std::string& dest,
                   unsigned type,
                   char fillCharacter);
 
-inline void outputString(std::string& dest,
+inline void outputString(String& dest,
                          const char* text,
                          int minSize,
                          int maxSize,
@@ -333,7 +462,7 @@ inline void outputString(std::string& dest,
     outputString(dest, text, strlen(text), minSize, maxSize, type, fillCharacter);
 }
 
-void outputNumber(std::string& dest,
+void outputNumber(String& dest,
                   long long pNumber,
                   int base,
                   int size,
@@ -362,7 +491,7 @@ template <typename T>
 void printfDetail(Format& format, T* value)
 {
     FormatState& state = format.nextNode->state;
-    std::string& dest = format.dest;
+    auto& dest = format.dest;
     char spec = state.formatSpecifier;
     uintptr_t pValue = uintptr_t(value);
 
@@ -397,7 +526,7 @@ template <typename T>
 void printfDetail(Format& format, const T* value)
 {
     FormatState& state = format.nextNode->state;
-    std::string& dest = format.dest;
+    auto& dest = format.dest;
     char spec = state.formatSpecifier;
     uintptr_t pValue = uintptr_t(value);
 
@@ -469,7 +598,7 @@ template <typename T, typename std::enable_if<!std::is_class<T>{} && !std::is_ar
 void containerDetail(Format& format, const T& value)
 {
     auto nextNode = format.nextNode;
-    std::string& dest = format.dest;
+    auto& dest = format.dest;
 
     auto child = nextNode->child;
 
@@ -507,7 +636,7 @@ template <typename T, typename std::enable_if<std::is_class<T>{} || std::is_arra
 void containerDetail(Format& format, const T& value)
 {
     auto nextNode = format.nextNode;
-    std::string& dest = format.dest;
+    auto& dest = format.dest;
 
     using std::begin;
     using std::end;
@@ -559,7 +688,7 @@ typename std::enable_if<I < sizeof...(Tp), void>::type
 tupleContainerDetail(Format& format, const std::tuple<Tp...>& value)
 {
     auto nextNode = format.nextNode;
-    std::string& dest = format.dest;
+    auto& dest = format.dest;
 
     auto child = nextNode->child;
 
@@ -616,7 +745,7 @@ template<std::size_t I = 0, typename... Tp>
 typename std::enable_if<I < sizeof...(Tp), void>::type
 tupleTupleDetail(Format& format, const std::tuple<Tp...>& value)
 {
-    std::string& dest = format.dest;
+    auto& dest = format.dest;
     auto nextNode = format.nextNode;
 
     if (nextNode == nullptr) {
@@ -727,7 +856,6 @@ void printfOne(Format& format, const T& value)
             }
 
             state.setWidthDynamic(false);
-            state.setActive(state.precisionDynamic());
             if (!state.active()) {
                 format.getNextNode(true);
             }
@@ -745,7 +873,6 @@ void printfOne(Format& format, const T& value)
             }
 
             state.setPrecisionDynamic(false);
-            state.setActive(false);
             format.getNextNode(true);
             return;
         }
@@ -875,7 +1002,6 @@ void printfPositionalOne(Format& format, const Ts&... ts)
             }
 
             state.setWidthDynamic(false);
-            state.setActive(state.precisionDynamic());
             if (!state.active()) {
                 format.getNextNode(true);
             }
@@ -895,7 +1021,6 @@ void printfPositionalOne(Format& format, const Ts&... ts)
             }
 
             state.setPrecisionDynamic(false);
-            state.setActive(false);
             format.getNextNode(true);
             return;
         }
@@ -932,7 +1057,7 @@ inline void unpack(Format&)
 template <typename... Ts>
 void addsprintf(std::string& dest, const char* f, const Ts&... ts)
 {
-    Format format(dest, f);
+    Format format(f);
     bool positional = false;
 
     format.nextNode = format.buildTree(positional);
@@ -960,6 +1085,8 @@ void addsprintf(std::string& dest, const char* f, const Ts&... ts)
             }
         }
     }
+
+    dest.append(format.dest.data(), format.dest.size());
 }
 };
 
@@ -1047,11 +1174,11 @@ int eprintf(const char* format, const Arguments&... arguments)
 template <typename... Arguments>
 std::string fstring(const char* format, const Arguments&... arguments)
 {
-    std::string tmp;
+    std::string result;
 
-    tsioImplementation::addsprintf(tmp, format, arguments...);
+    tsioImplementation::addsprintf(result, format, arguments...);
 
-    return tmp;
+    return result;
 }
 };
 

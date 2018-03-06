@@ -310,7 +310,8 @@ static void withPrintf(const ReportData& report, unsigned year, unsigned quarter
 static void overview(const ReportData& report, unsigned year, unsigned quarter)
 {
     oprintf("Yearly report for %dQ%d\n" // title
-            "%72{-%}\n"                 // 72 dashes and a new line
+            "%72{-%}"                   // 72 dashes and a new line 
+            "\n"                        // new line
             "%["                        // start report vector
               "%<"                      // start customer tuple
                 "%5d "                  // customer number
@@ -318,10 +319,12 @@ static void overview(const ReportData& report, unsigned year, unsigned quarter)
                 "%10.2f     "           // quarterly total
                 "%["                    // start monthly array
                   "%6.2f%%"             // monthly percentage
-                "%]\n"                  // end monthly array
+                "%]                     // end monthly array"
+                "\n"                    // new line
               "%>"                      // end customer tuple
             "%]"                        // end report vector
-            "%72{-%}\n",                // 72 dashes and a new line
+            "%72{-%}"                   // 72 dashes
+            "\n",                       // new line
             year, quarter, report);     // arguments
 }
 
