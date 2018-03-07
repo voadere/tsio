@@ -200,7 +200,8 @@ static void outputNumber(tsioImplementation::String& dest,
 {
     using namespace tsioImplementation;
 
-    unsigned long long number = pNumber;;
+    unsigned long long number = pNumber;
+    ;
     size_t prefixSize = 0;
     char prefix[4];
     const size_t bufSize = 134; // allow for 128 binary digits plus radix indicator and sign
@@ -982,69 +983,66 @@ void tsioImplementation::printfDetail(Format& format,
         fillCharacter = ' ';
     }
 
-    // let's favor the most used %d format
+    // let's favor the most used formats
     if (spec == 'd' || spec == 'i') {
         outputNumber<10, true>(
                 dest, sValue, state.width, state.precisionGiven() ? state.precision : 1, type, fillCharacter);
         return;
+    } else if (spec == 'u') {
+        outputNumber<10>(
+                dest, uValue, state.width, state.precisionGiven() ? state.precision : 1, type, fillCharacter);
+        return;
     }
 
-    // The following binary search is faster than a switch statenent
-    if (spec < 'n') {
-        if (spec < 'b') {
-            if (spec == 'X') {
-                outputNumber<16>(dest,
-                                 uValue,
-                                 state.width,
-                                 state.precisionGiven() ? state.precision : 1,
-                                 type | upcase,
-                                 fillCharacter);
-                return;
-            }
-
-            if (spec == 'B') {
-                outputNumber<2>(dest, uValue, state.width, state.precision, type | upcase, fillCharacter);
-                return;
-            }
-
-            if (spec == 'C') {
-                char c = char(sValue);
-                outputString(dest,
-                             &c,
-                             1,
+    switch (spec) {
+        case 'X':
+            outputNumber<16>(dest,
+                             uValue,
                              state.width,
-                             state.precisionGiven() ? (state.precision > 0 ? state.precision : 1)
-                                                    : std::numeric_limits<int>::max(),
-                             type | nice,
+                             state.precisionGiven() ? state.precision : 1,
+                             type | upcase,
                              fillCharacter);
-                return;
-            }
-        } else {
-            if (spec == 'b') {
-                outputNumber<2>(dest, uValue, state.width, state.precision, type, fillCharacter);
-                return;
-            }
+            return;
 
-            if (spec == 'c') {
-                char c = char(sValue);
-                outputString(dest,
-                             &c,
-                             1,
-                             state.width,
-                             state.precisionGiven() ? (state.precision > 0 ? state.precision : 1)
-                                                    : std::numeric_limits<int>::max(),
-                             type,
-                             fillCharacter);
-                return;
-            }
-        }
-    } else if (spec < 'u') {
-        if (spec == 'n') {
-            format.error("Did you forget to specify the parameter for '%n' by pointer");
+        case 'B':
+            outputNumber<2>(dest, uValue, state.width, state.precision, type | upcase, fillCharacter);
+            return;
+
+        case 'C': {
+            char c = char(sValue);
+            outputString(dest,
+                         &c,
+                         1,
+                         state.width,
+                         state.precisionGiven() ? (state.precision > 0 ? state.precision : 1)
+                                                : std::numeric_limits<int>::max(),
+                         type | nice,
+                         fillCharacter);
             return;
         }
 
-        if (spec == 'o') {
+        case 'b':
+            outputNumber<2>(dest, uValue, state.width, state.precision, type, fillCharacter);
+            return;
+
+        case 'c': {
+            char c = char(sValue);
+            outputString(dest,
+                         &c,
+                         1,
+                         state.width,
+                         state.precisionGiven() ? (state.precision > 0 ? state.precision : 1)
+                                                : std::numeric_limits<int>::max(),
+                         type,
+                         fillCharacter);
+            return;
+        }
+
+        case 'n':
+            format.error("Did you forget to specify the parameter for '%n' by pointer");
+            return;
+
+        case 'o':
             outputNumber<8>(dest,
                             uValue,
                             state.width,
@@ -1052,9 +1050,8 @@ void tsioImplementation::printfDetail(Format& format,
                             type,
                             fillCharacter);
             return;
-        }
 
-        if (spec == 's') {
+        case 's':
             if (isSigned) {
                 outputNumber<10, true>(dest,
                                        sValue,
@@ -1072,15 +1069,15 @@ void tsioImplementation::printfDetail(Format& format,
             }
 
             return;
-        }
-    } else if (spec == 'u') {
-        outputNumber<10>(
-                dest, uValue, state.width, state.precisionGiven() ? state.precision : 1, type, fillCharacter);
-        return;
-    } else if (spec == 'x') {
-        outputNumber<16>(
-                dest, uValue, state.width, state.precisionGiven() ? state.precision : 1, type, fillCharacter);
-        return;
+
+        case 'x':
+            outputNumber<16>(dest,
+                             uValue,
+                             state.width,
+                             state.precisionGiven() ? state.precision : 1,
+                             type,
+                             fillCharacter);
+            return;
     }
 
     format.error("Invalid format '", spec, "' for integeral value");
@@ -1327,7 +1324,7 @@ std::ostream& tsio::fmt::operator()(std::ostream& out) const
     return out;
 }
 
-tsio::CFormat::CFormat (const char* f)
+tsio::CFormat::CFormat(const char* f)
 {
     size_t size = strlen(f);
 
@@ -1343,4 +1340,3 @@ tsio::CFormat::~CFormat()
 {
     free(formatCache);
 }
-

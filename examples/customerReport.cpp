@@ -319,7 +319,7 @@ static void overview(const ReportData& report, unsigned year, unsigned quarter)
                 "%10.2f     "           // quarterly total
                 "%["                    // start monthly array
                   "%6.2f%%"             // monthly percentage
-                "%]                     // end monthly array"
+                "%]"                    // end monthly array"
                 "\n"                    // new line
               "%>"                      // end customer tuple
             "%]"                        // end report vector
@@ -329,7 +329,7 @@ static void overview(const ReportData& report, unsigned year, unsigned quarter)
 }
 
 /*
- * The function withFmt sows the generation of the same report using
+ * The function withFmt shows the generation of the same report using
  * std::ostream formating, but with the fmt manipulator to set the ostream flags
  *
  * The 'fmt()' at the end resets all ostream flags to their default values.
