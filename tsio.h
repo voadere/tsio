@@ -55,13 +55,14 @@ enum TypeEnum {
     spaceIfPositive = plusIfPositive << 1,
     leftJustify = spaceIfPositive << 1,
     centerJustify = leftJustify << 1,
-    upcase = centerJustify << 1,
-    alternative = upcase << 1,
-    nice = alternative << 1,
-    widthDynamic = nice << 1,
+    alternative = centerJustify << 1,
+    widthDynamic = alternative << 1,
     precisionDynamic = widthDynamic << 1,
     widthGiven = precisionDynamic << 1,
-    precisionGiven = widthGiven << 1
+    precisionGiven = widthGiven << 1,
+    positionalChildren = precisionGiven << 1,
+    upcase = positionalChildren << 1,
+    nice = upcase << 1
 };
 
 static_assert(precisionGiven < 1 << 16, "TypeEnum is larger than unsigned short");
@@ -204,6 +205,11 @@ struct FormatState
         return type & TypeEnum::widthDynamic;
     }
 
+    bool positionalChildren() const
+    {
+        return type & TypeEnum::positionalChildren;
+    }
+
     bool precisionDynamic() const
     {
         return type & TypeEnum::precisionDynamic;
@@ -247,6 +253,15 @@ struct FormatState
             type |= TypeEnum::precisionDynamic;
         } else {
             type &= ~TypeEnum::precisionDynamic;
+        }
+    }
+
+    void setPositionalChildren(bool v = true)
+    {
+        if (v) {
+            type |= TypeEnum::positionalChildren;
+        } else {
+            type &= ~TypeEnum::positionalChildren;
         }
     }
 
@@ -524,6 +539,31 @@ void printfDetail(Format& format, const T& value)
     };
 }
 
+template <std::size_t I = 0, typename... Tp>
+typename std::enable_if<I == sizeof...(Tp), void>::type
+printfNth(Format& format, size_t index, const std::tuple<Tp...>& value)
+{
+}
+
+template <std::size_t I = 0, typename... Tp>
+typename std::enable_if<I < sizeof...(Tp), void>::type
+printfNth(Format& format, size_t index, const std::tuple<Tp...>& value)
+{
+    if (index == I) {
+        FormatState& state = format.nextNode->state;
+
+        if (state.formatSpecifier == '[') {
+            containerDetail(format, std::get<I>(value));
+        } else if (state.formatSpecifier == '<') {
+            tupleDetail(format, std::get<I>(value));
+        } else {
+            printfDetail(format, std::get<I>(value));
+        }
+    } else {
+        printfNth<I + 1>(format, index, value);
+    }
+}
+
 template<std::size_t I = 0, typename... Tp>
 typename std::enable_if<I == sizeof...(Tp), void>::type
 tuplePrintfDetail(Format& format, const std::tuple<Tp...>& value)
@@ -747,17 +787,44 @@ void tupleDetail(Format& format, const std::tuple<Ts...>& value)
     auto nextNode = format.nextNode;
 
     format.nextNode = nextNode->child;
-    tupleTupleDetail(format, value);
 
-    auto child = format.getNextSibling(format.nextNode, true);
+    if (nextNode->state.positionalChildren()) {
+        while (format.nextNode != nullptr) {
+            auto nextNode = format.nextNode;
+            FormatState& state = nextNode->state;
 
-    if (child == nullptr || child->state.formatSpecifier != '>') {
-        format.error("Invalid tuple format (expected %>)");
+            if (state.prefixSize != 0) {
+                format.dest.append(state.prefix, state.prefixSize);
+            }
+
+            if (state.position == 0) {
+                if (state.formatSpecifier == '>') {
+                    if (nextNode->next == nullptr) {
+                        // nop
+                    } else {
+                        format.error("Invalid tuple format (expected %>)");
+                    }
+                } else {
+                    format.error("Positional arguments can not be mixed with sequential arguments");
+                }
+            } else {
+                printfNth(format, state.position - 1, value);
+            }
+
+            format.nextNode = format.getNextSibling(format.nextNode);
+        }
     } else {
-        FormatState& state = child->state;
+        tupleTupleDetail(format, value);
+        auto child = format.getNextSibling(format.nextNode, true);
 
-        if (state.prefixSize != 0) {
-            format.dest.append(state.prefix, state.prefixSize);
+        if (child == nullptr || child->state.formatSpecifier != '>') {
+            format.error("Invalid tuple format (expected %>)");
+        } else {
+            FormatState& state = child->state;
+
+            if (state.prefixSize != 0) {
+                format.dest.append(state.prefix, state.prefixSize);
+            }
         }
     }
 
@@ -885,6 +952,7 @@ void printfNth(Format& format, size_t index, const T& value, const Ts&... ts)
         printfNth(format, index - 1, ts...);
     }
 }
+
 inline void readSpecNum(Format& format, int& dest, size_t)
 {
     format.error("Invalid position in format");

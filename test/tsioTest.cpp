@@ -426,20 +426,6 @@ static void extensions()
     text = fstring("{ %#[v=%.2f, %] }", fa);
     expect("{ v=1.20, v=2.30, v=3.40, v=4.56 }", text);
 
-    auto t = std::make_tuple(1, 2.3, "four");
-
-    text = fstring("%5s", t);
-    expect("    1  2.3 four", text);
-
-    text = fstring("%[v=%s, %]", t);
-    expect("v=1, v=2.3, v=four, ", text);
-
-    text = fstring("{ %#[v=%s, %] }", t);
-    expect("{ v=1, v=2.3, v=four }", text);
-
-    text = fstring("%<%5d %5.2f %10s%>", t);
-    expect("    1  2.30       four", text);
-
     std::map<int, const char*> m = { {1, "one"}, {3, "three"}, {2, "two"} };
 
     text = fstring("%#[%<{ key: %3d, value: %5s }%>, %]", m);
@@ -456,6 +442,41 @@ static void extensions()
 
     text = fstring("%d%5T%d%5T%d%5T%d%5T%d", 1, 1234, 123456, 12345, 9);
     expect("1    1234 123456    12345     9", text);
+}
+
+static void testTuple()
+{
+    std::string text;
+    auto t = std::make_tuple(1, 2.3, "four");
+
+    text = fstring("%5s", t);
+    expect("    1  2.3 four", text);
+
+    text = fstring("%[v=%s, %]", t);
+    expect("v=1, v=2.3, v=four, ", text);
+
+    text = fstring("{ %#[v=%s, %] }", t);
+    expect("{ v=1, v=2.3, v=four }", text);
+
+    text = fstring("%<%5d %5.2f %10s%>", t);
+    expect("    1  2.30       four", text);
+
+    text = fstring("%<{ %2$6.2f, %1$5d, %3$5s and again %2$6.2f%> }", t);
+    expect("{   2.30,     1,  four and again   2.30 }", text);
+
+    auto tv = std::make_tuple(1, std::vector<int>{1, 3, 5}, "four");
+
+    text = fstring("( %5s }", tv);
+    expect("(     1    1    3    5 four }", text);
+
+    text = fstring("%<{ %5d, %5d, %5s }%>", tv);
+    expect("{     1,     1    3    5,  four }", text);
+
+    text = fstring("%<{ %5d, [%#[%5d, %]], %5s }%>", tv);
+    expect("{     1, [    1,     3,     5],  four }", text);
+
+    text = fstring("%<{ [%2$#[%5d, %]], %3$5s,  %1$5d }%>", tv);
+    expect("{ [    1,     3,     5],  four,      1 }", text);
 }
 
 static void testCFormat()
@@ -483,6 +504,7 @@ static void run()
     testRepeatingFormats();
     testBinaryFormat();
     testPositional();
+    testTuple();
     testCFormat();
     extensions();
 }
@@ -491,7 +513,7 @@ static void test()
 {
     std::string text;
 
-    std::cout << text;
+    std::cout << text << std::endl;
 }
 
 static void examples()

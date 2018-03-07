@@ -743,9 +743,20 @@ tsioImplementation::FormatNode* tsioImplementation::Format::buildTree()
                 break;
             }
 
-            if (state.formatSpecifier == '{' || state.formatSpecifier == '[' ||
-                state.formatSpecifier == '<') {
+            if (state.formatSpecifier == '{' || state.formatSpecifier == '[') {
                 node->child = buildTree();
+            } else if (state.formatSpecifier == '<') {
+                bool parentPositional = positional;
+
+                positional = false;
+
+                node->child = buildTree();
+
+                if (positional) {
+                    state.setPositionalChildren();
+                }
+
+                positional = parentPositional;
             }
         }
     }
