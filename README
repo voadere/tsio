@@ -1,5 +1,7 @@
-tsio: type safe, printf compatible sprintf and fprintf functions, and an io manipulator
-      that allows setting ostream flags according to a format.
+tsio: type safe, printf compatible sprintf and fprintf functions extended
+      to easely format containers and tuples.
+
+      An io manipulator that allows setting ostream flags according to a format.
 
 
 - Features:
