@@ -475,8 +475,26 @@ static void run()
 static void test()
 {
     std::string text;
+    CFormat cf("With CFormat: %d.\n");
 
+    text = fstring(cf, 1234);
     std::cout << text;
+
+    text = fstring(cf, 9876);
+    addsprintf(text, cf, 10);
+    std::cout << text;
+
+    eprintf(cf, 99);
+
+    oprintf(cf, 432);
+
+    CFormat cformat("%5d");
+
+    for (int i = 0; i < 10; ++i) {
+        oprintf(cformat, i);
+    }
+
+    oprintf("\n");
 }
 
 static void examples()

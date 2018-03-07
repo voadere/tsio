@@ -707,7 +707,7 @@ void tsioImplementation::Format::skipToFormat()
     }
 }
 
-tsioImplementation::FormatNode* tsioImplementation::Format::buildTree(bool& positional)
+tsioImplementation::FormatNode* tsioImplementation::Format::buildTree()
 {
     FormatNode* result = nullptr;
     FormatNode* next = nullptr;
@@ -744,7 +744,7 @@ tsioImplementation::FormatNode* tsioImplementation::Format::buildTree(bool& posi
 
             if (state.formatSpecifier == '{' || state.formatSpecifier == '[' ||
                 state.formatSpecifier == '<') {
-                node->child = buildTree(positional);
+                node->child = buildTree();
             }
         }
     }
@@ -963,105 +963,6 @@ void tsio::fmt::initialize(const char* format)
     }
 
     state.parse(format);
-}
-
-std::ostream& tsio::fmt::operator()(std::ostream& out) const
-{
-    using namespace tsioImplementation;
-
-    out.width(0);
-    out.precision(6);
-    out.fill(' ');
-
-    out.unsetf(std::ios::adjustfield | std::ios::basefield | std::ios::floatfield | std::ios::showbase |
-               std::ios::boolalpha | std::ios::showpoint | std::ios::showpos | std::ios::uppercase);
-
-    if (state.formatSpecifier == 0) {
-        return out;
-    }
-
-    if (state.type & leftJustify) {
-        out.setf(std::ios::left, std::ios::adjustfield);
-    }
-
-    if (state.type & numericfill) {
-        out.fill(state.fillCharacter);
-        out.setf(std::ios::internal, std::ios::adjustfield);
-    }
-
-    if (state.type & alfafill) {
-        out.fill(state.fillCharacter);
-    }
-
-    if (state.type & plusIfPositive) {
-        out.setf(std::ios::showpos);
-    }
-
-    if (state.type & alternative) {
-        out.setf(std::ios::showpoint | std::ios::showbase);
-    }
-
-    // spaceIfPositive can not be implemented on streams
-    if (state.widthGiven()) {
-        out.width(state.width);
-    }
-
-    if (state.precisionGiven()) {
-        out.precision(state.precision);
-    }
-
-    switch (state.formatSpecifier) {
-        case 'd':
-        case 'i':
-        case 'u':
-            break;
-
-        case 'o':
-            out.setf(std::ios::oct, std::ios::basefield);
-            break;
-
-        case 'X':
-            out.setf(std::ios::uppercase);
-            // Fallthru
-        case 'x':
-        case 'p':
-            out.setf(std::ios::hex, std::ios::basefield);
-            break;
-
-        case 's':
-            out.setf(std::ios::boolalpha);
-            break;
-
-        case 'E':
-            out.setf(std::ios::uppercase);
-            // Fallthru
-        case 'e':
-            out.setf(std::ios::scientific, std::ios::floatfield);
-            break;
-
-        case 'F':
-            out.setf(std::ios::uppercase);
-            // Fallthru
-        case 'f':
-            out.setf(std::ios::fixed, std::ios::floatfield);
-            break;
-
-        case 'G':
-            out.setf(std::ios::uppercase);
-            // Fallthru
-        case 'g':
-            out.unsetf(std::ios::floatfield);
-            break;
-
-        case 'A':
-            out.setf(std::ios::uppercase);
-            // Fallthru
-        case 'a':
-            out.setf(std::ios_base::fixed | std::ios_base::scientific, std::ios_base::floatfield);
-            break;
-    }
-
-    return out;
 }
 
 void tsioImplementation::printfDetail(Format& format,
@@ -1326,3 +1227,120 @@ void tsioImplementation::printfDetail(Format& format, bool value)
         printfDetail(format, static_cast<long long>(value));
     }
 }
+
+std::ostream& tsio::fmt::operator()(std::ostream& out) const
+{
+    using namespace tsioImplementation;
+
+    out.width(0);
+    out.precision(6);
+    out.fill(' ');
+
+    out.unsetf(std::ios::adjustfield | std::ios::basefield | std::ios::floatfield | std::ios::showbase |
+               std::ios::boolalpha | std::ios::showpoint | std::ios::showpos | std::ios::uppercase);
+
+    if (state.formatSpecifier == 0) {
+        return out;
+    }
+
+    if (state.type & leftJustify) {
+        out.setf(std::ios::left, std::ios::adjustfield);
+    }
+
+    if (state.type & numericfill) {
+        out.fill(state.fillCharacter);
+        out.setf(std::ios::internal, std::ios::adjustfield);
+    }
+
+    if (state.type & alfafill) {
+        out.fill(state.fillCharacter);
+    }
+
+    if (state.type & plusIfPositive) {
+        out.setf(std::ios::showpos);
+    }
+
+    if (state.type & alternative) {
+        out.setf(std::ios::showpoint | std::ios::showbase);
+    }
+
+    // spaceIfPositive can not be implemented on streams
+    if (state.widthGiven()) {
+        out.width(state.width);
+    }
+
+    if (state.precisionGiven()) {
+        out.precision(state.precision);
+    }
+
+    switch (state.formatSpecifier) {
+        case 'd':
+        case 'i':
+        case 'u':
+            break;
+
+        case 'o':
+            out.setf(std::ios::oct, std::ios::basefield);
+            break;
+
+        case 'X':
+            out.setf(std::ios::uppercase);
+            // Fallthru
+        case 'x':
+        case 'p':
+            out.setf(std::ios::hex, std::ios::basefield);
+            break;
+
+        case 's':
+            out.setf(std::ios::boolalpha);
+            break;
+
+        case 'E':
+            out.setf(std::ios::uppercase);
+            // Fallthru
+        case 'e':
+            out.setf(std::ios::scientific, std::ios::floatfield);
+            break;
+
+        case 'F':
+            out.setf(std::ios::uppercase);
+            // Fallthru
+        case 'f':
+            out.setf(std::ios::fixed, std::ios::floatfield);
+            break;
+
+        case 'G':
+            out.setf(std::ios::uppercase);
+            // Fallthru
+        case 'g':
+            out.unsetf(std::ios::floatfield);
+            break;
+
+        case 'A':
+            out.setf(std::ios::uppercase);
+            // Fallthru
+        case 'a':
+            out.setf(std::ios_base::fixed | std::ios_base::scientific, std::ios_base::floatfield);
+            break;
+    }
+
+    return out;
+}
+
+tsio::CFormat::CFormat (const char* f)
+{
+    size_t size = strlen(f);
+
+    formatCache = static_cast<char*>(malloc(size + 1));
+    memcpy(formatCache, f, size + 1);
+    format.format = formatCache;
+    format.wholeFormat = formatCache;
+
+    format.nextNode = format.buildTree();
+}
+
+tsio::CFormat::~CFormat()
+{
+    free(formatCache);
+}
+

@@ -125,6 +125,12 @@ class String
             }
         }
 
+        void clear()
+        {
+            mEod = 0;
+            mData[mEod] = 0;
+        }
+
         size_t size() const {
             return mEod;
         }
@@ -320,6 +326,8 @@ struct FormatNodes
 
 struct Format
 {
+    Format() = default;
+
     Format(const char* f)
         : format(f), wholeFormat(f)
     {
@@ -338,7 +346,7 @@ struct Format
     }
 
     FormatNode* getNode();
-    FormatNode* buildTree(bool& positional);
+    FormatNode* buildTree();
     static void printTree(std::ostream& os, FormatNode* node, unsigned indent);
     void dump();
 
@@ -433,14 +441,15 @@ struct Format
     void skipToFormat();
     void tabTo(unsigned column, bool absolute);
 
-    const char* format;
-    const char* wholeFormat;
+    String dest;
+    const char* format = nullptr;
+    const char* wholeFormat = nullptr;
     std::vector<StackElement> stack;
     FormatNode* nextNode = nullptr;
     FormatNodes nodes;
     FormatNodes* chuncks = &nodes;
     bool errorGiven = false;
-    String dest;
+    bool positional = false;
 };
 
 void outputPointer(String& dest,
@@ -1033,15 +1042,12 @@ inline void unpack(Format&)
 #endif
 
 template <typename... Ts>
-void addsprintf(std::string& dest, const char* f, const Ts&... ts)
+void addsprintf(Format& format, const Ts&... ts)
 {
-    Format format(f);
-    bool positional = false;
-
-    format.nextNode = format.buildTree(positional);
+    format.nextNode = &format.nodes.nodes[0];
     format.getNextNode(true);
 
-    if (positional) {
+    if (format.positional) {
         while (format.nextNode != nullptr) {
             printfPositionalOne(format, ts...);
         }
@@ -1063,6 +1069,15 @@ void addsprintf(std::string& dest, const char* f, const Ts&... ts)
             }
         }
     }
+}
+
+template <typename... Ts>
+void addsprintf(std::string& dest, const char* f, const Ts&... ts)
+{
+    Format format(f);
+
+    format.nextNode = format.buildTree();
+    addsprintf(format, ts...);
 
     dest.append(format.dest.data(), format.dest.size());
 }
@@ -1089,6 +1104,27 @@ private:
     void initialize(const char* format);
 
     tsioImplementation::FormatState state;
+};
+
+class CFormat
+{
+    public:
+        CFormat(const char* f);
+        ~CFormat();
+
+        tsioImplementation::Format& getFormat()
+        {
+            return format;
+        }
+
+        void reset()
+        {
+            format.dest.clear();
+        }
+
+    private:
+        char* formatCache = nullptr;
+        tsioImplementation::Format format;
 };
 
 inline std::ostream& operator<<(std::ostream& out, const fmt& f)
@@ -1154,6 +1190,89 @@ std::string fstring(const char* format, const Arguments&... arguments)
 {
     std::string result;
 
+    tsioImplementation::addsprintf(result, format, arguments...);
+
+    return result;
+}
+};
+
+namespace tsioImplementation
+{
+template <typename... Ts>
+void addsprintf(std::string& dest, tsio::CFormat& format, const Ts&... ts)
+{
+    addsprintf(format.getFormat(), ts...);
+
+    dest.append(format.getFormat().dest.data(), format.getFormat().dest.size());
+}
+};
+
+namespace tsio
+{
+template <typename... Arguments>
+int sprintf(std::string& dest, CFormat& format, const Arguments&... arguments)
+{
+    dest.clear();
+
+    format.reset();
+    tsioImplementation::addsprintf(dest, format, arguments...);
+
+    return int(dest.size());
+}
+
+template <typename... Arguments>
+int addsprintf(std::string& dest, CFormat& format, const Arguments&... arguments)
+{
+    auto startSize = dest.size();
+
+    format.reset();
+    tsioImplementation::addsprintf(dest, format, arguments...);
+
+    return int(dest.size() - startSize);
+}
+
+template <typename... Arguments>
+int fprintf(std::ostream& os, CFormat& format, const Arguments&... arguments)
+{
+    std::string tmp;
+
+    format.reset();
+    tsioImplementation::addsprintf(tmp, format, arguments...);
+    os << tmp;
+
+    return int(tmp.size());
+}
+
+template <typename... Arguments>
+int oprintf(CFormat& format, const Arguments&... arguments)
+{
+    std::string tmp;
+
+    format.reset();
+    tsioImplementation::addsprintf(tmp, format, arguments...);
+    std::cout << tmp;
+
+    return int(tmp.size());
+}
+
+template <typename... Arguments>
+int eprintf(CFormat& format, const Arguments&... arguments)
+{
+    std::string tmp;
+
+    format.reset();
+    tsioImplementation::addsprintf(tmp, format, arguments...);
+    std::cerr << tmp;
+
+    return int(tmp.size());
+}
+
+template <typename... Arguments>
+std::string fstring(CFormat& format, const Arguments&... arguments)
+{
+    std::string result;
+
+    format.reset();
     tsioImplementation::addsprintf(result, format, arguments...);
 
     return result;
