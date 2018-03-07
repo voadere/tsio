@@ -68,22 +68,13 @@ static_assert(precisionGiven < 1 << 16, "TypeEnum is larger than unsigned short"
 
 inline TSIO_ALWAYS_INLINE char* copy(char* dest, const char* src, unsigned count)
 {
-    if (count < 2) {
-        if (count == 1) {
-            dest[0] = src[0];
-        }
-    } else if (count < 5) {
-        dest[0] = src[0];
-        dest[1] = src[1];
-
-        if (count == 3) {
-            dest[2] = src[2];
-        } else {
-            dest[2] = src[2];
-            dest[3] = src[3];
-        }
-    } else {
-        memcpy(dest, src, count);
+    switch(count) {
+        case 4: dest[3] = src[3];
+        case 3: dest[2] = src[2];
+        case 2: dest[1] = src[1];
+        case 1: dest[0] = src[0];
+        case 0: break;
+        default: memcpy(dest, src, count);
     }
 
     return dest + count;
@@ -91,22 +82,13 @@ inline TSIO_ALWAYS_INLINE char* copy(char* dest, const char* src, unsigned count
 
 inline TSIO_ALWAYS_INLINE char* fill(char* dest, char c, unsigned count)
 {
-    if (count < 2) {
-        if (count == 1) {
-            dest[0] = c;
-        }
-    } else if (count < 5) {
-        dest[0] = c;
-        dest[1] = c;
-
-        if (count == 3) {
-            dest[2] = c;
-        } else {
-            dest[2] = c;
-            dest[3] = c;
-        }
-    } else {
-        memset(dest, c, count);
+    switch(count) {
+        case 4: dest[3] = c;
+        case 3: dest[2] = c;
+        case 2: dest[1] = c;
+        case 1: dest[0] = c;
+        case 0: break;
+        default: memset(dest, c, count);
     }
 
     return dest + count;

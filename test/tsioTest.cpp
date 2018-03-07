@@ -458,6 +458,20 @@ static void extensions()
     expect("1    1234 123456    12345     9", text);
 }
 
+static void testCFormat()
+{
+    std::string text;
+    CFormat cf("With CFormat: %d.\n");
+
+    text = fstring(cf, 1234);
+    expect("With CFormat: 1234.\n", text);
+
+    text = fstring(cf, 9876);
+    addsprintf(text, cf, 10);
+    expect("With CFormat: 9876.\nWith CFormat: 10.\n", text);
+
+}
+
 static void run()
 {
     testStringIntegral();
@@ -469,32 +483,15 @@ static void run()
     testRepeatingFormats();
     testBinaryFormat();
     testPositional();
+    testCFormat();
     extensions();
 }
 
 static void test()
 {
     std::string text;
-    CFormat cf("With CFormat: %d.\n");
 
-    text = fstring(cf, 1234);
     std::cout << text;
-
-    text = fstring(cf, 9876);
-    addsprintf(text, cf, 10);
-    std::cout << text;
-
-    eprintf(cf, 99);
-
-    oprintf(cf, 432);
-
-    CFormat cformat("%5d");
-
-    for (int i = 0; i < 10; ++i) {
-        oprintf(cformat, i);
-    }
-
-    oprintf("\n");
 }
 
 static void examples()
