@@ -7,10 +7,9 @@ tsio: type safe, printf compatible sprintf and fprintf functions extended
 - Features:
 
   'tsio::sprintf' and 'tsio::fprintf are' fully compatible with
-  'std::sprintf' and 'std::fprintf, with the few exception:
+  'std::sprintf' and 'std::fprintf, with few exceptions:
    - wide characters are not implemented.
-   - errors during formatting are printed on 'std::cerr'; no negative
-     value is ever returned.
+   - errors during formatting are printed on 'std::cerr'.
 
   tsio::oprintf and tsio::eprintf generate output on std::cout and
   std::cerr respectively.

@@ -4,6 +4,9 @@ Help("""
 Compiling the tsio package.
 """)
 
+CACHE = ARGUMENTS.get('CACHE', '')
+Help("    CACHE=directory      specify cache directory.\n")
+
 DEBUG = ARGUMENTS.get('DEBUG', '0')
 Help("    DEBUG=[1/0]          enable/disable debugging.  Default = 0.\n")
 
@@ -21,6 +24,10 @@ gcc = Environment(CC='gcc',
 
 clang = Environment(CC='clang',
                     CXX='clang++')
+
+if CACHE != '':
+    CacheDir(CACHE)
+
 
 if DEBUG == '1':
     gcc.Append(CCFLAGS=' -g')

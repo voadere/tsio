@@ -8,23 +8,46 @@ static void test()
     int i = 1234;
     double d = 123.45;
     std::vector<int> v = { 1, 2, 3 };
-    std::tuple<int, int>t = { 1, 2};
+    std::tuple<int, int, int> t = { 9, 8, 7};
     auto p = std::make_pair(1, "one");
 
-    dest = fstring("%<%s%>", 1);
-    dest = fstring("value: %n.", &d);
-    dest = fstring("value: %*d.", d, i);
-    dest = fstring("vector: %[ %d %}", v);
-    dest = fstring("vector: %[ %d", v);
-    dest = fstring("vector: %< %d %}", t);
-    dest = fstring("vector: %< %d", t);
-    dest = fstring("vector: %< %d %}", p);
-    dest = fstring("vector: %< %d", p);
+    // general
+    dest = fstring("  1: %<%s%>", 1);
+    dest = fstring("  2: %n.", &d);
+    dest = fstring("  3: %*d.", d, i);
+    dest = fstring("  4: %d %d", 1, 2, 3);
+    dest = fstring("  5: %d %d", 1);
+    dest = fstring("  6: %5d:", d);
+    dest = fstring("  7: %5f:", i);
 
-    dest = fstring("%d %d", 1, 2, 3);
-    dest = fstring("%d %d", 1);
-    dest = fstring("%d %1$d", 1);
-    dest = fstring("%2$d %1$d", 1);
+    // container formats
+    dest = fstring("101: %[ %d %}", v);
+    dest = fstring("102: %[ %d", v);
+    dest = fstring("103: %[ %d %d %]", v);
+    dest = fstring("104: %[ %]", v);
+    dest = fstring("105: %[ %2{%d%}", v);
+
+    // tuple formats
+    dest = fstring("201: %< %d %}", t);
+    dest = fstring("202: %< %d", t);
+    dest = fstring("203: %< %d %}", p);
+    dest = fstring("204: %< %d", p);
+    dest = fstring("205: %< %5d%5d %>", t);
+    dest = fstring("206: %< %5d%5d%5d%5d %>", t);
+    dest = fstring("207: %< %2{%5d%} %>", t);
+    dest = fstring("208: %< %4{%5d%} %>", t);
+    dest = fstring("209: %< %>", t);
+    dest = fstring("210: %< %3$d, %4$d%>", t);
+
+    // positional
+    dest = fstring("301: %d %1$d", 1);
+    dest = fstring("302: %2$d %1$d", 1);
+
+    // dynamic
+    dest = fstring("401: %*d", 1);
+    dest = fstring("402: %[%*d%]", v, 5);
+
+//  std::cout << dest << std::endl;
 }
 
 int main()

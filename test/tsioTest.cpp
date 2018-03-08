@@ -103,24 +103,28 @@ void test(const T& value,
             std::string fmt('%' + f + "   \t\"" + f + "\".");
             const char* format = fmt.c_str();
 
+            int stdReturn = 0;
+            int tsioReturn = false;
+
             if (dyn1 != nullptr) {
                 if (dyn2 != nullptr) {
-                    sprintf(buf, format, *dyn1, *dyn2, value);
-                    sprintf(text, format, *dyn1, *dyn2, value);
+                    stdReturn = sprintf(buf, format, *dyn1, *dyn2, value);
+                    tsioReturn = sprintf(text, format, *dyn1, *dyn2, value);
                 } else {
-                    sprintf(buf, format, *dyn1, value);
-                    sprintf(text, format, *dyn1, value);
+                    stdReturn = sprintf(buf, format, *dyn1, value);
+                    tsioReturn = sprintf(text, format, *dyn1, value);
                 }
             } else if (dyn2 != nullptr) {
-                sprintf(buf, format, *dyn2, value);
-                sprintf(text, format, *dyn2, value);
+                stdReturn = sprintf(buf, format, *dyn2, value);
+                tsioReturn = sprintf(text, format, *dyn2, value);
             } else {
-                sprintf(buf, format, value);
-                sprintf(text, format, value);
+                stdReturn = sprintf(buf, format, value);
+                tsioReturn = sprintf(text, format, value);
             }
 
             //          std::cout << buf << std::endl;
 
+            expect(stdReturn, tsioReturn);
             expect(buf, text, value);
             count++;
         }
@@ -440,6 +444,9 @@ static void extensions()
     text = fstring("%d%#10T%d%#30T%d%#15T%d", 1, 2222, 3, 4);
     expect("1        2222                3\n              4", text);
 
+    text = fstring("%d 1: %#10T%d%#30T%d 2: %#15T%d", 1, 2222, 3, 4);
+    expect("1 1:     2222                3 2: \n              4", text);
+
     text = fstring("%d%5T%d%5T%d%5T%d%5T%d", 1, 1234, 123456, 12345, 9);
     expect("1    1234 123456    12345     9", text);
 }
@@ -450,6 +457,9 @@ static void testTuple()
     auto t = std::make_tuple(1, 2.3, "four");
 
     text = fstring("%5s", t);
+    expect("    1  2.3 four", text);
+
+    text = fstring("%<%3{%5s%}%>", t);
     expect("    1  2.3 four", text);
 
     text = fstring("%[v=%s, %]", t);
@@ -477,6 +487,7 @@ static void testTuple()
 
     text = fstring("%<{ [%2$#[%5d, %]], %3$5s,  %1$5d }%>", tv);
     expect("{ [    1,     3,     5],  four,      1 }", text);
+
 }
 
 static void testCFormat()

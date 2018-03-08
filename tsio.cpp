@@ -121,7 +121,7 @@ static void outputString(tsioImplementation::String& dest,
                             buf[0] = '\\';
                             buf[1] = char(((c >> 6) & 0x3) + '0');
                             buf[2] = char(((c >> 3) & 0x7) + '0');
-                            buf[3] = char(((c)&0x7) + '0');
+                            buf[3] = char((c & 0x7) + '0');
                             buf[4] = '\0';
                         } else {
                             buf[0] = c;
@@ -385,47 +385,6 @@ void tsioImplementation::outputPointer(String& dest,
     outputNumber<16>(dest, pNumber, size, precision, type | alternative, fillCharacter);
 }
 
-static bool isValidFormatSpecifier(unsigned c)
-{
-    switch (c) {
-        case '%':
-        case '(':
-        case ')':
-        case '<':
-        case '>':
-        case 'A':
-        case 'B':
-        case 'C':
-        case 'E':
-        case 'F':
-        case 'G':
-        case 'S':
-        case 'T':
-        case 'X':
-        case '[':
-        case ']':
-        case 'a':
-        case 'b':
-        case 'c':
-        case 'd':
-        case 'e':
-        case 'f':
-        case 'g':
-        case 'i':
-        case 'n':
-        case 'o':
-        case 'p':
-        case 's':
-        case 'u':
-        case 'x':
-        case '{':
-        case '}':
-            return true;
-    }
-
-    return false;
-}
-
 void tsioImplementation::FormatState::parse(const char*& f)
 {
     const char* format = f;
@@ -451,12 +410,6 @@ void tsioImplementation::FormatState::parse(const char*& f)
             format = pt;
             ch = *(format++);
         }
-    }
-
-    if (isValidFormatSpecifier(ch)) {
-        formatSpecifier = ch;
-        f = format;
-        return;
     }
 
     if (!widthGiven()) {
@@ -724,7 +677,7 @@ tsioImplementation::FormatNode* tsioImplementation::Format::buildTree()
             next = node;
         }
 
-        FormatState& state = node->state;
+        auto& state = node->state;
 
         state.prefix = format;
         skipToFormat();
@@ -793,6 +746,76 @@ void tsioImplementation::Format::tabTo(unsigned column, bool absolute)
     }
 }
 
+bool tsioImplementation::Format::handleSpecialNodes(FormatNode*& node)
+{
+    if (node == nullptr || node->state.dynamic()) {
+        return false;
+    }
+
+    auto& state = node->state;
+    auto spec = state.formatSpecifier;
+
+    if (spec == '%') {
+        if (state.prefixSize != 0) {
+            dest.append(state.prefix, state.prefixSize);
+        }
+
+        dest.push_back('%');
+        node = node->next;
+    } else if (spec == 'T') {
+        if (state.prefixSize != 0) {
+            dest.append(state.prefix, state.prefixSize);
+        }
+
+        tabTo(state.width, state.type & alternative);
+        node = node->next;
+    } else if (spec == '{') {
+        if (state.prefixSize != 0) {
+            dest.append(state.prefix, state.prefixSize);
+        }
+
+        auto child = node->child;
+
+        if (child->next == nullptr && child->state.formatSpecifier == '}') {
+            for (unsigned i = 0, c = state.width; i < c; ++i) {
+                dest.append(child->state.prefix, child->state.prefixSize);
+            }
+
+            node = node->next;
+        } else {
+            push(node, state.width);
+            node = child;
+        }
+    } else if (spec == '}') {
+        if (state.prefixSize != 0) {
+            dest.append(state.prefix, state.prefixSize);
+        }
+
+        if (!stack.empty()) {
+            auto& element = stack.back();
+
+            if ((element.count--) == 0) {
+                node = element.node->next;
+                stack.pop_back();
+            } else {
+                node = element.node->child;
+            }
+        } else {
+            node = node->next;
+        }
+    } else if (spec == 0) {
+        if (state.prefixSize != 0) {
+            dest.append(state.prefix, state.prefixSize);
+        }
+
+        node = node->next;
+    } else {
+        return false;
+    }
+
+    return true;
+}
+
 tsioImplementation::FormatNode* tsioImplementation::Format::getNextSibling(FormatNode* node, bool first)
 {
     if (node == nullptr) {
@@ -803,54 +826,24 @@ tsioImplementation::FormatNode* tsioImplementation::Format::getNextSibling(Forma
         node = node->next;
     }
 
-    for (;;) {
-        if (node == nullptr || node->state.active()) {
-            return node;
-        }
-
-        FormatState& state = node->state;
-        auto spec = state.formatSpecifier;
-
-        if (spec == '%') {
-            if (node->state.prefixSize != 0) {
-                dest.append(node->state.prefix, node->state.prefixSize);
-            }
-
-            dest.push_back('%');
-            node = node->next;
-
-            continue;
-        }
-
-        if (spec == 'T') {
-            tabTo(state.width, node->state.type & alternative);
-            nextNode = nextNode->next;
-
-            continue;
-        }
-
-        if (spec == '{') {
-            auto child = node->child;
-
-            if (child->next == nullptr && child->state.formatSpecifier == '}') {
-                if (node->state.prefixSize != 0) {
-                    dest.append(node->state.prefix, node->state.prefixSize);
-                }
-
-                for (unsigned i = 0, c = node->state.width; i < c; ++i) {
-                    dest.append(child->state.prefix, child->state.prefixSize);
-                }
-
-                node = node->next;
-
-                continue;
-            }
-        }
-
-        break;
+    while (handleSpecialNodes(node)) {
+        // nop
     }
 
     return node;
+}
+
+tsioImplementation::FormatNode* tsioImplementation::Format::getChild(FormatNode* node)
+{
+    auto child = node->child;
+    auto& state = child->state;
+    auto spec = state.formatSpecifier;
+
+    if (spec == '%' || spec == 'T' || spec == '{') {
+        return getNextSibling(child, true);
+    }
+
+    return child;
 }
 
 void tsioImplementation::Format::getNextNode(bool first)
@@ -863,65 +856,8 @@ void tsioImplementation::Format::getNextNode(bool first)
         nextNode = nextNode->next;
     }
 
-    for (;;) {
-        while (nextNode == nullptr) {
-            if (!stack.empty()) {
-                auto& element = stack.back();
-
-                if ((element.count--) == 0) {
-                    nextNode = element.node->next;
-                    stack.pop_back();
-                } else {
-                    nextNode = element.node->child;
-                }
-            } else {
-                return;
-            }
-        }
-
-        FormatState& state = nextNode->state;
-        auto spec = state.formatSpecifier;
-
-        if (state.active()) {
-            return;
-        }
-
-        if (spec == '%') {
-            if (nextNode->state.prefixSize != 0) {
-                dest.append(nextNode->state.prefix, nextNode->state.prefixSize);
-            }
-
-            dest.push_back('%');
-            nextNode = nextNode->next;
-        } else if (spec == 'T') {
-            tabTo(state.width, state.type & alternative);
-            nextNode = nextNode->next;
-        } else if (spec == '{') {
-            if (nextNode->state.prefixSize != 0) {
-                dest.append(nextNode->state.prefix, nextNode->state.prefixSize);
-            }
-
-            auto child = nextNode->child;
-
-            if (child->next == nullptr && child->state.formatSpecifier == '}') {
-                for (unsigned i = 0, c = nextNode->state.width; i < c; ++i) {
-                    dest.append(child->state.prefix, child->state.prefixSize);
-                }
-
-                nextNode = nextNode->next;
-            } else {
-                push(state.width);
-                nextNode = child;
-            }
-        } else if (spec == '}' || spec == 0) {
-            if (nextNode->state.prefixSize != 0) {
-                dest.append(nextNode->state.prefix, nextNode->state.prefixSize);
-            }
-
-            nextNode = nextNode->next;
-        } else {
-            break;
-        }
+    while (handleSpecialNodes(nextNode)) {
+        // nop
     }
 }
 
@@ -982,7 +918,7 @@ void tsioImplementation::printfDetail(Format& format,
                                       unsigned long long uValue,
                                       bool isSigned)
 {
-    FormatState& state = format.nextNode->state;
+    auto& state = format.nextNode->state;
     auto& dest = format.dest;
     char spec = state.formatSpecifier;
     char fillCharacter = state.fillCharacter;
@@ -1096,7 +1032,7 @@ void tsioImplementation::printfDetail(Format& format,
 
 void tsioImplementation::printfDetail(Format& format, const std::string& value)
 {
-    FormatState& state = format.nextNode->state;
+    auto& state = format.nextNode->state;
     auto& dest = format.dest;
     char spec = state.formatSpecifier;
 
@@ -1130,7 +1066,7 @@ void tsioImplementation::printfDetail(Format& format, const std::string& value)
 
 void tsioImplementation::printfDetail(Format& format, const char* value)
 {
-    FormatState& state = format.nextNode->state;
+    auto& state = format.nextNode->state;
     auto& dest = format.dest;
     char spec = state.formatSpecifier;
     uintptr_t pValue = uintptr_t(value);
@@ -1168,7 +1104,7 @@ void tsioImplementation::printfDetail(Format& format, const char* value)
 
 void tsioImplementation::printfDetail(Format& format, double value)
 {
-    FormatState& state = format.nextNode->state;
+    auto& state = format.nextNode->state;
     auto& dest = format.dest;
     char spec = state.formatSpecifier;
 
@@ -1193,22 +1129,22 @@ void tsioImplementation::printfDetail(Format& format, double value)
                 f = state.unParse();
             }
 
-            static char* pt = nullptr;
-            static size_t allocatedSize = 0;
+            size_t destSize = dest.size();
+            char* pt = dest.data() + destSize;
+            size_t remainingSize = dest.capacity() - dest.size();
 
-            int s = snprintf(pt, allocatedSize, f, value);
+            int s = snprintf(pt, remainingSize, f, value);
 
             if (s < 0) {
                 return;
             }
 
-            if (s >= int(allocatedSize)) {
-                allocatedSize = s * 2 + 1;
-                pt = static_cast<char*>(realloc(pt, allocatedSize));
+            dest.widen(s);
+
+            if (s > int(remainingSize)) {
+                pt = dest.data() + destSize;
                 sprintf(pt, f, value);
             }
-
-            dest.append(pt, s);
         }
 
         break;
