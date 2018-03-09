@@ -26,15 +26,15 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef FORMATTER_H
-#define FORMATTER_H
+#ifndef TSIO_H
+#define TSIO_H
 
 #include <array>
+#include <cstring>
 #include <iomanip>
 #include <iostream>
 #include <limits>
 #include <malloc.h>
-#include <string.h>
 #include <string>
 #include <vector>
 
@@ -62,10 +62,9 @@ enum TypeEnum {
     precisionGiven = widthGiven << 1,
     positionalChildren = precisionGiven << 1,
     upcase = positionalChildren << 1,
-    nice = upcase << 1
+    nice = upcase << 1,
+    special = nice << 1
 };
-
-static_assert(precisionGiven < 1 << 16, "TypeEnum is larger than unsigned short");
 
 inline TSIO_ALWAYS_INLINE char* copy(char* dest, const char* src, unsigned count)
 {
@@ -99,8 +98,11 @@ class String
 {
     public:
         String() {
-            *mShortData = 0;
+            mShortData[0] = 0;
         }
+
+        String(const String&) = delete;
+        String& operator=(const String&) = delete;
 
         ~String() {
             if (mData != mShortData) {
@@ -225,6 +227,11 @@ struct FormatState
         return type & (TypeEnum::widthDynamic | TypeEnum::precisionDynamic);
     }
 
+    bool special() const
+    {
+        return type & TypeEnum::special;
+    }
+
     void setWidthGiven(bool v = true)
     {
         if (v) {
@@ -246,7 +253,7 @@ struct FormatState
     void setWidthDynamic(bool v = true)
     {
         if (v) {
-            type |= TypeEnum::widthDynamic;
+            type |= TypeEnum::widthDynamic | TypeEnum::widthGiven;
         } else {
             type &= ~TypeEnum::widthDynamic;
         }
@@ -255,7 +262,7 @@ struct FormatState
     void setPrecisionDynamic(bool v = true)
     {
         if (v) {
-            type |= TypeEnum::precisionDynamic;
+            type |= TypeEnum::precisionDynamic | TypeEnum::precisionGiven;
         } else {
             type &= ~TypeEnum::precisionDynamic;
         }
@@ -270,37 +277,46 @@ struct FormatState
         }
     }
 
+    void setSpecial(bool v = true)
+    {
+        if (v) {
+            type |= TypeEnum::special;
+        } else {
+            type &= ~TypeEnum::special;
+        }
+    }
+
     void reset()
     {
         prefix = nullptr;
         suffix = nullptr;
-        type = 0;
         width = 0;
         precision = 0;
         position = 0;
         widthPosition = 0;
         precisionPosition = 0;
         prefixSize = 0;
+        type = 0;
         formatSpecifier = 0;
         fillCharacter = ' ';
     }
 
     const char* prefix;
     const char* suffix;
-    unsigned short type;
     unsigned width;
     unsigned precision;
     unsigned position;
     unsigned widthPosition;
     unsigned precisionPosition;
     unsigned prefixSize;
+    unsigned type;
     char formatSpecifier;
     char fillCharacter;
 
     mutable char buf[32]; // enough for 5 flags, 2 ints, a dot and a specifier.
 };
 
-struct FormatNode
+struct alignas(16) FormatNode
 {
     FormatNode() = default;
 
@@ -334,6 +350,9 @@ struct Format
         : format(f), wholeFormat(f)
     {
     }
+
+    Format(const Format&) = delete;
+    Format& operator=(const Format&) = delete;
 
     ~Format()
     {
@@ -1003,9 +1022,9 @@ bool printfDispatch(Format& format, size_t index, const T& value, const Ts&... t
     if (index == 0) {
         printfDetail(format, value);
         return true;
-    } else {
-        return false;
     }
+
+    return false;
 }
 
 template <typename... Ts>

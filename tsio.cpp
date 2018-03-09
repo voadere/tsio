@@ -27,7 +27,6 @@
  */
 
 #include "tsio.h"
-#include <time.h>
 
 TSIO_NEVER_INLINE void tsioImplementation::String::resize(size_t newSize)
 {
@@ -201,7 +200,6 @@ static void outputNumber(tsioImplementation::String& dest,
     using namespace tsioImplementation;
 
     unsigned long long number = pNumber;
-    ;
     size_t prefixSize = 0;
     char prefix[4];
     const size_t bufSize = 134; // allow for 128 binary digits plus radix indicator and sign
@@ -388,6 +386,7 @@ void tsioImplementation::outputPointer(String& dest,
 void tsioImplementation::FormatState::parse(const char*& f)
 {
     const char* format = f;
+    bool startsWithWidth = false;
 
     unsigned char ch = *(format++);
 
@@ -407,12 +406,13 @@ void tsioImplementation::FormatState::parse(const char*& f)
         } else {
             width = number;
             setWidthGiven();
+            startsWithWidth = true;
             format = pt;
             ch = *(format++);
         }
     }
 
-    if (!widthGiven()) {
+    if (!startsWithWidth) {
         char alfaFill = ' ';
         char numericFill = ' ';
 
@@ -449,31 +449,32 @@ void tsioImplementation::FormatState::parse(const char*& f)
             ch = *(format++);
         }
 
-        if ((type & (plusIfPositive | spaceIfPositive)) == (plusIfPositive | spaceIfPositive)) {
-            type &= ~spaceIfPositive;
-        }
+        if ((type & (plusIfPositive | spaceIfPositive  | numericfill | alfafill)) != 0) {
+            if ((type & (plusIfPositive | spaceIfPositive)) == (plusIfPositive | spaceIfPositive)) {
+                type &= ~spaceIfPositive;
+            }
 
-        if ((type & (leftJustify | numericfill)) == (leftJustify | numericfill)) {
-            type &= ~numericfill;
-        }
+            if ((type & (leftJustify | numericfill)) == (leftJustify | numericfill)) {
+                type &= ~numericfill;
+            }
 
-        if ((type & (centerJustify | numericfill)) == (centerJustify | numericfill)) {
-            type &= ~numericfill;
-        }
+            if ((type & (centerJustify | numericfill)) == (centerJustify | numericfill)) {
+                type &= ~numericfill;
+            }
 
-        if ((type & (alfafill | numericfill)) == (alfafill | numericfill)) {
-            type &= ~alfafill;
-        }
+            if ((type & (alfafill | numericfill)) == (alfafill | numericfill)) {
+                type &= ~alfafill;
+            }
 
-        if (type & numericfill) {
-            fillCharacter = numericFill;
-        } else if (type & alfafill) {
-            fillCharacter = alfaFill;
+            if (type & numericfill) {
+                fillCharacter = numericFill;
+            } else if (type & alfafill) {
+                fillCharacter = alfaFill;
+            }
         }
 
         if (ch == '*') {
             setWidthDynamic();
-            setWidthGiven();
             ch = *(format++);
 
             if (unsigned(ch - '0') < 9) {
@@ -543,8 +544,13 @@ void tsioImplementation::FormatState::parse(const char*& f)
 
     formatSpecifier = ch;
     if (ch == 0) {
+        setSpecial();
         f = format - 1;
     } else {
+        if (ch == '%' || ch == 'T' || ch == '{' || ch == '}') {
+            setSpecial();
+        }
+
         f = format;
     }
 }
@@ -663,26 +669,22 @@ void tsioImplementation::Format::skipToFormat()
 
 tsioImplementation::FormatNode* tsioImplementation::Format::buildTree()
 {
-    FormatNode* result = nullptr;
-    FormatNode* next = nullptr;
+    if (*format == 0) {
+        return nullptr;
+    }
 
-    while (*format != 0) {
-        FormatNode* node = getNode();
+    FormatNode* node = getNode();
+    FormatNode* result = node;
+    FormatNode* next = node;
 
-        if (result == nullptr) {
-            result = node;
-            next = node;
-        } else {
-            next->next = node;
-            next = node;
-        }
-
+    for (;;) {
         auto& state = node->state;
 
         state.prefix = format;
         skipToFormat();
         if (*format == 0) {
             state.prefixSize = unsigned(format - state.prefix);
+            state.setSpecial();
         } else {
             state.prefixSize = unsigned(format - state.prefix - 1);
 
@@ -692,7 +694,7 @@ tsioImplementation::FormatNode* tsioImplementation::Format::buildTree()
             }
 
             if (state.formatSpecifier == '}' || state.formatSpecifier == ']' ||
-                state.formatSpecifier == '>') {
+                    state.formatSpecifier == '>') {
                 break;
             }
 
@@ -712,6 +714,14 @@ tsioImplementation::FormatNode* tsioImplementation::Format::buildTree()
                 positional = parentPositional;
             }
         }
+
+        if (*format == 0) {
+            break;
+        }
+        
+        node = getNode();
+        next->next = node;
+        next = node;
     }
 
     return result;
@@ -826,8 +836,10 @@ tsioImplementation::FormatNode* tsioImplementation::Format::getNextSibling(Forma
         node = node->next;
     }
 
-    while (handleSpecialNodes(node)) {
-        // nop
+    if (node != nullptr && node->state.special()) {
+        while (node != nullptr && handleSpecialNodes(node)) {
+            // nop
+        }
     }
 
     return node;
@@ -856,8 +868,10 @@ void tsioImplementation::Format::getNextNode(bool first)
         nextNode = nextNode->next;
     }
 
-    while (handleSpecialNodes(nextNode)) {
-        // nop
+    if (nextNode != nullptr && nextNode->state.special()) {
+        while (nextNode != nullptr && handleSpecialNodes(nextNode)) {
+            // nop
+        }
     }
 }
 
@@ -925,7 +939,7 @@ void tsioImplementation::printfDetail(Format& format,
 
     auto type = state.type;
 
-    if ((type & numericfill) && state.precisionGiven()) {
+    if ((type & (numericfill | precisionGiven)) == (numericfill | precisionGiven)) {
         type &= ~numericfill;
         fillCharacter = ' ';
     }

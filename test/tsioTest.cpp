@@ -527,13 +527,6 @@ static void test()
     std::cout << text << std::endl;
 }
 
-static void examples()
-{
-    std::string text;
-
-    std::cout << text << '\n';
-}
-
 int main(int argc, char* argv[])
 {
     test();
@@ -547,8 +540,6 @@ int main(int argc, char* argv[])
     for (int i = 0; i < repeatCount; ++i) {
         run();
     }
-
-    examples();
 
     oprintf("    %d sprintf tests executed in %4.2f seconds\n",
             count,
