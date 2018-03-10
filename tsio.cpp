@@ -946,6 +946,12 @@ void tsioImplementation::printfDetail(Format& format,
 
     // let's favor the most used formats
     if (spec == 'd' || spec == 'i') {
+        if (sValue > 0 && (type & (plusIfPositive | spaceIfPositive)) == 0) {
+            outputNumber<10>(
+                    dest, uValue, state.width, state.precisionGiven() ? state.precision : 1, type, fillCharacter);
+            return;
+        }
+
         outputNumber<10, true>(
                 dest, sValue, state.width, state.precisionGiven() ? state.precision : 1, type, fillCharacter);
         return;
