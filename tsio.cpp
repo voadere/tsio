@@ -28,7 +28,7 @@
 
 #include "tsio.h"
 
-TSIO_NEVER_INLINE void tsioImplementation::String::resize(size_t newSize)
+TSIO_NEVER_INLINE void tsioImplementation::Buffer::resize(size_t newSize)
 {
     size_t newLen = mLen;
 
@@ -36,20 +36,20 @@ TSIO_NEVER_INLINE void tsioImplementation::String::resize(size_t newSize)
         newLen += newLen / 2;
     }
 
-    newLen = (newLen & (~7)) + 7;
+    newLen = ((newLen + 15) / 16) * 16;
 
     if (mData == mShortData) {
-        mData = static_cast<char*>(malloc(newLen + 1));
+        mData = static_cast<char*>(malloc(newLen));
 
-        std::copy(mShortData, mShortData + mEod + 1, mData);
+        std::copy(mShortData, mShortData + mEod, mData);
     } else {
-        mData = static_cast<char*>(realloc(mData, newLen + 1));
+        mData = static_cast<char*>(realloc(mData, newLen));
     }
 
     mLen = newLen;
 }
 
-static void outputString(tsioImplementation::String& dest,
+static void outputString(tsioImplementation::Buffer& dest,
                          const char* text,
                          size_t s,
                          int minSize,
@@ -179,7 +179,7 @@ static void outputString(tsioImplementation::String& dest,
     }
 }
 
-inline void outputString(tsioImplementation::String& dest,
+inline void outputString(tsioImplementation::Buffer& dest,
                          const char* text,
                          int minSize,
                          int maxSize,
@@ -190,7 +190,7 @@ inline void outputString(tsioImplementation::String& dest,
 }
 
 template <int base, bool isSigned = false>
-static void outputNumber(tsioImplementation::String& dest,
+static void outputNumber(tsioImplementation::Buffer& dest,
                          long long pNumber,
                          int size,
                          int precision,
@@ -373,7 +373,7 @@ static void outputNumber(tsioImplementation::String& dest,
     }
 }
 
-void tsioImplementation::outputPointer(String& dest,
+void tsioImplementation::outputPointer(Buffer& dest,
                                        uintptr_t pNumber,
                                        int size,
                                        int precision,
@@ -655,20 +655,9 @@ tsioImplementation::FormatNode* tsioImplementation::Format::getNode()
     return result;
 }
 
-void tsioImplementation::Format::skipToFormat()
-{
-    while (*format != 0) {
-        if (*format == '%') {
-            format++;
-            return;
-        }
-
-        format++;
-    }
-}
-
 tsioImplementation::FormatNode* tsioImplementation::Format::buildTree()
 {
+
     if (*format == 0) {
         return nullptr;
     }
@@ -679,46 +668,50 @@ tsioImplementation::FormatNode* tsioImplementation::Format::buildTree()
 
     for (;;) {
         auto& state = node->state;
+        const char* fmt = format;
 
-        state.prefix = format;
-        skipToFormat();
-        if (*format == 0) {
-            state.prefixSize = unsigned(format - state.prefix);
-            state.setSpecial();
-        } else {
-            state.prefixSize = unsigned(format - state.prefix - 1);
-
-            state.parse(format);
-            if (state.position != 0 || state.widthPosition != 0 || state.precisionPosition != 0) {
-                positional = true;
-            }
-
-            if (state.formatSpecifier == '}' || state.formatSpecifier == ']' ||
-                    state.formatSpecifier == '>') {
-                break;
-            }
-
-            if (state.formatSpecifier == '{' || state.formatSpecifier == '[') {
-                node->child = buildTree();
-            } else if (state.formatSpecifier == '<') {
-                bool parentPositional = positional;
-
-                positional = false;
-
-                node->child = buildTree();
-
-                if (positional) {
-                    state.setPositionalChildren();
-                }
-
-                positional = parentPositional;
-            }
+        state.prefix = fmt;
+        while (*fmt != 0 && *(fmt++) != '%') {
+            // nop
         }
 
-        if (*format == 0) {
+        if (*fmt == 0) {
+            state.prefixSize = unsigned(fmt - state.prefix);
+            state.setSpecial();
             break;
         }
-        
+
+        state.prefixSize = unsigned(fmt - state.prefix - 1);
+
+        state.parse(fmt);
+
+        format = fmt;
+        if (state.position != 0 || state.widthPosition != 0 || state.precisionPosition != 0) {
+            positional = true;
+        }
+
+        auto spec = state.formatSpecifier;
+
+        if (spec == '}' || spec == ']' || spec == '>') {
+            break;
+        }
+
+        if (spec == '{' || spec == '[') {
+            node->child = buildTree();
+        } else if (spec == '<') {
+            bool parentPositional = positional;
+
+            positional = false;
+
+            node->child = buildTree();
+
+            if (positional) {
+                state.setPositionalChildren();
+            }
+
+            positional = parentPositional;
+        }
+
         node = getNode();
         next->next = node;
         next = node;
