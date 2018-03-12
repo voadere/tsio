@@ -157,9 +157,9 @@ static void step1(const ReportData& report, unsigned year, unsigned quarter)
  *
  *      std::cout << '\n';
  *
- * with a oprintf statement that uses a container format.
+ * with a oprintf statement that uses a loop format.
  *
- * The container format is defined as '%[ fff %]' and repeats the format fff
+ * The loop format is defined as '%[ fff %]' and repeats the format fff
  * for each element of the array.
  */
 
@@ -180,9 +180,9 @@ static void step2(const ReportData& report, unsigned year, unsigned quarter)
             "     ";
 
         oprintf("%[%6.2f%%%]\n", std::get<3>(customer));
-        //       ^^          start container format
+        //       ^^          start loop format
         //         ^^^^^^^   format to be used for each element
-        //                ^^ end container format
+        //                ^^ end loop format
     }
 
     std::cout << std::setw(72) << std::setfill('-') << "" << std::setfill(' ') << '\n';
@@ -230,10 +230,10 @@ static void step3(const ReportData& report, unsigned year, unsigned quarter)
  *      oprintf("%5d %-20s%10.2f     %[%6.2f%%%]\n", std::get<0>(customer),
  *              std::get<1>(customer), std::get<2>(customer), std::get<3>(customer));
  *
- * with a tuple format.
+ * with a sequence format.
  *
- * A tuple format is defined as '%< f0 f1 f2... %> where each fn is the
- * format for the correspomding element in the tuple.
+ * A sequence format is defined as '%< f0 f1 f2... %> where each fn is the
+ * format for the correspomding element in the sequence.
  */
 
 static void step4(const ReportData& report, unsigned year, unsigned quarter)
@@ -246,12 +246,12 @@ static void step4(const ReportData& report, unsigned year, unsigned quarter)
     for (const auto& customer : report) {
         oprintf("%3d %<%5d %-20s%10.2f     %[%6.2f%%%]\n%>", lineNumber, customer);
         //       ^^^                                       format for the line number
-        //           ^^                                    start of tuple format
+        //           ^^                                    start of sequence format
         //             ^^^                                 format for element 0
         //                 ^^^^^                           format for element 1
         //                      ^^^^^                      format for element 2
         //                                 ^^^^^^^^^^^     format for element 3
-        //                                              ^^ end of tuple format
+        //                                              ^^ end of sequence format
     }
 
     std::cout << std::setw(72) << std::setfill('-') << "" << std::setfill(' ') << '\n';
@@ -263,9 +263,9 @@ static void step4(const ReportData& report, unsigned year, unsigned quarter)
  *      oprintf("%<%5d %-20s%10.2f     %[%6.2f%%%]\n%>", customer);
  *  }
  *
- * with another container format
+ * with another loop format
  *
- * It also uses the %N format to print the index in the container,
+ * It also uses the %N format to print the index in the loop,
  * which is equal to the line number.
  */
 
@@ -275,7 +275,7 @@ static void step5(const ReportData& report, unsigned year, unsigned quarter)
         std::setw(72) << std::setfill('-') << "" << std::setfill(' ') << '\n';
 
     oprintf("%[%3N %<%5d %-20s%10.2f     %[%6.2f%%%]\n%>%]", report);
-    //       ^^                                     ^^   another container format
+    //       ^^                                     ^^   another loop format
     //         ^^^                                       format for the index
     //             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ format repeated for each element
 
@@ -342,8 +342,8 @@ static void overview(const ReportData& report, unsigned year, unsigned quarter)
             "%72{-%}"                   // 72 dashes and a new line 
             "\n"                        // new line
             "%["                        // start report vector
-              "%3N "                    // container index
-              "%<"                      // start customer tuple
+              "%3N "                    // loop index
+              "%<"                      // start customer sequence
                 "%5d "                  // customer number
                 "%-20s"                 // customer name
                 "%10.2f     "           // quarterly total
@@ -351,7 +351,7 @@ static void overview(const ReportData& report, unsigned year, unsigned quarter)
                   "%6.2f%%"             // monthly percentage
                 "%]"                    // end monthly array"
                 "\n"                    // new line
-              "%>"                      // end customer tuple
+              "%>"                      // end customer sequence
             "%]"                        // end report vector
             "%72{-%}"                   // 72 dashes
             "\n",                       // new line

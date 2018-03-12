@@ -778,7 +778,7 @@ bool tsioImplementation::Format::handleSpecialNodes(FormatNode*& node)
         }
 
         if (indexStack.empty()) {
-            error("%N format is only valid inside rpeatimg, container and tuple formats");
+            error("%N format is only valid inside rpeatimg, loop and sequence formats");
         } else {
             auto index = indexStack.back();
 

@@ -577,9 +577,9 @@ printfNth(Format& format, size_t index, const std::tuple<Tp...>& value)
         auto& state = format.nextNode->state;
 
         if (state.formatSpecifier == '[') {
-            containerDetail(format, std::get<I>(value));
+            loopDetail(format, std::get<I>(value));
         } else if (state.formatSpecifier == '<') {
-            tupleDetail(format, std::get<I>(value));
+            sequenceDetail(format, std::get<I>(value));
         } else {
             printfDetail(format, std::get<I>(value));
         }
@@ -628,7 +628,7 @@ int toSpec(Format& format, const T& value)
 }
 
 template <typename T, typename std::enable_if<!std::is_class<T>{} && !std::is_array<T>{}, int>::type = 0>
-void containerDetail(Format& format, const T& value)
+void loopDetail(Format& format, const T& value)
 {
     auto& dest = format.dest;
     auto nextNode = format.nextNode;
@@ -645,9 +645,9 @@ void containerDetail(Format& format, const T& value)
     if (state.formatSpecifier == ']') {
         format.error("Missing format");
     } else if (state.formatSpecifier == '[') {
-        containerDetail(format, value);
+        loopDetail(format, value);
     } else if (state.formatSpecifier == '<') {
-        tupleDetail(format, value);
+        sequenceDetail(format, value);
     } else {
         printfDetail(format, value);
     }
@@ -655,7 +655,7 @@ void containerDetail(Format& format, const T& value)
     child = format.getNextSibling(child);
 
     if (child == nullptr || child->state.formatSpecifier != ']') {
-        format.error(child, "Invalid container format (missing %])");
+        format.error(child, "Invalid loop format (missing %])");
     } else if (!(nextNode->state.type & alternative)) {
         auto& state = child->state;
 
@@ -668,7 +668,7 @@ void containerDetail(Format& format, const T& value)
 }
 
 template <typename T, typename std::enable_if<std::is_class<T>{} || std::is_array<T>{}, int>::type = 0>
-void containerDetail(Format& format, const T& value)
+void loopDetail(Format& format, const T& value)
 {
     auto nextNode = format.nextNode;
     auto& dest = format.dest;
@@ -693,9 +693,9 @@ void containerDetail(Format& format, const T& value)
         }
 
         if (state.formatSpecifier == '[') {
-            containerDetail(format, *b);
+            loopDetail(format, *b);
         } else if (state.formatSpecifier == '<') {
-            tupleDetail(format, *b);
+            sequenceDetail(format, *b);
         } else {
             printfDetail(format, *b);
         }
@@ -705,7 +705,7 @@ void containerDetail(Format& format, const T& value)
         child = format.getNextSibling(child);
 
         if (child == nullptr || child->state.formatSpecifier != ']') {
-            format.error(child, "Invalid container format (expected %])");
+            format.error(child, "Invalid loop format (expected %])");
         } else if (b != e || !(nextNode->state.type & alternative)) {
             auto& state = child->state;
 
@@ -723,13 +723,13 @@ void containerDetail(Format& format, const T& value)
 
 template<std::size_t I = 0, typename... Tp>
 typename std::enable_if<I == sizeof...(Tp), void>::type
-tupleContainerDetail(Format& format, const std::tuple<Tp...>& value)
+tupleLoopDetail(Format& format, const std::tuple<Tp...>& value)
 {
 }
 
 template<std::size_t I = 0, typename... Tp>
 typename std::enable_if<I < sizeof...(Tp), void>::type
-tupleContainerDetail(Format& format, const std::tuple<Tp...>& value)
+tupleLoopDetail(Format& format, const std::tuple<Tp...>& value)
 {
     auto nextNode = format.nextNode;
     auto& dest = format.dest;
@@ -744,9 +744,9 @@ tupleContainerDetail(Format& format, const std::tuple<Tp...>& value)
     }
 
     if (state.formatSpecifier == '[') {
-        containerDetail(format, std::get<I>(value));
+        loopDetail(format, std::get<I>(value));
     } else if (state.formatSpecifier == '<') {
-        tupleDetail(format, std::get<I>(value));
+        sequenceDetail(format, std::get<I>(value));
     } else {
         printfDetail(format, std::get<I>(value));
     }
@@ -754,7 +754,7 @@ tupleContainerDetail(Format& format, const std::tuple<Tp...>& value)
     child = format.getNextSibling(child);
 
     if (child == nullptr || child->state.formatSpecifier != ']') {
-        format.error(child, "Invalid container format(expected %]");
+        format.error(child, "Invalid loop format(expected %]");
     } else if (I != sizeof...(Tp) - 1 || !(nextNode->state.type & alternative)) {
         auto& state = child->state;
 
@@ -765,41 +765,41 @@ tupleContainerDetail(Format& format, const std::tuple<Tp...>& value)
 
     format.nextNode = nextNode;
     format.indexStack.back()++;
-    tupleContainerDetail<I + 1, Tp...>(format, value);
+    tupleLoopDetail<I + 1, Tp...>(format, value);
 }
 
 template <typename... Ts>
-void containerDetail(Format& format, const std::tuple<Ts...>& value)
+void loopDetail(Format& format, const std::tuple<Ts...>& value)
 {
     format.indexStack.push_back(0);
-    tupleContainerDetail(format, value);
+    tupleLoopDetail(format, value);
     format.indexStack.pop_back();
 }
 
 template <typename T1, typename T2>
-void containerDetail(Format& format, const std::pair<T1, T2>& value)
+void loopDetail(Format& format, const std::pair<T1, T2>& value)
 {
     format.indexStack.push_back(0);
-    tupleContainerDetail(format, std::tuple<T1, T2>(value));
+    tupleLoopDetail(format, std::tuple<T1, T2>(value));
     format.indexStack.pop_back();
 }
 
 template<std::size_t I = 0, typename... Tp>
 typename std::enable_if<I == sizeof...(Tp), void>::type
-tupleTupleDetail(Format& format, const std::tuple<Tp...>& value)
+tupleSequenceDetail(Format& format, const std::tuple<Tp...>& value)
 {
     format.error("Only ", I, " formats for tuple elements, ", sizeof...(Tp), " required");
 }
 
 template<std::size_t I = 0, typename... Tp>
 typename std::enable_if<I < sizeof...(Tp), void>::type
-tupleTupleDetail(Format& format, const std::tuple<Tp...>& value)
+tupleSequenceDetail(Format& format, const std::tuple<Tp...>& value)
 {
     auto& dest = format.dest;
     auto nextNode = format.nextNode;
 
     if (nextNode == nullptr) {
-        format.error("missing argument in tuple format");
+        format.error("missing argument in sequence format");
         return;
     }
 
@@ -812,9 +812,9 @@ tupleTupleDetail(Format& format, const std::tuple<Tp...>& value)
     if (state.formatSpecifier == '>') {
         format.error("Only ", I, " formats for tuple elements, ", sizeof...(Tp), " required");
     } else if (state.formatSpecifier == '[') {
-        containerDetail(format, std::get<I>(value));
+        loopDetail(format, std::get<I>(value));
     } else if (state.formatSpecifier == '<') {
-        tupleDetail(format, std::get<I>(value));
+        sequenceDetail(format, std::get<I>(value));
     } else {
         printfDetail(format, std::get<I>(value));
     }
@@ -823,12 +823,12 @@ tupleTupleDetail(Format& format, const std::tuple<Tp...>& value)
 
     format.indexStack.back()++;
     if (I + 1 < sizeof...(Tp)) {
-        tupleTupleDetail<I + 1, Tp...>(format, value);
+        tupleSequenceDetail<I + 1, Tp...>(format, value);
     }
 }
 
 template <typename... Ts>
-void tupleDetail(Format& format, const std::tuple<Ts...>& value)
+void sequenceDetail(Format& format, const std::tuple<Ts...>& value)
 {
     auto nextNode = format.nextNode;
     format.indexStack.push_back(0);
@@ -849,7 +849,7 @@ void tupleDetail(Format& format, const std::tuple<Ts...>& value)
                     if (nextNode->next == nullptr) {
                         // nop
                     } else {
-                        format.error("Invalid tuple format (expected %>)");
+                        format.error("Invalid sequence format (expected %>)");
                     }
                 } else {
                     format.error("Positional arguments can not be mixed with sequential arguments");
@@ -862,11 +862,11 @@ void tupleDetail(Format& format, const std::tuple<Ts...>& value)
             format.indexStack.back()++;
         }
     } else {
-        tupleTupleDetail(format, value);
+        tupleSequenceDetail(format, value);
         auto child = format.getNextSibling(format.nextNode, true);
 
         if (child == nullptr || child->state.formatSpecifier != '>') {
-            format.error("Invalid tuple format (expected %>)");
+            format.error("Invalid sequence format (expected %>)");
         } else {
             auto& state = child->state;
 
@@ -881,19 +881,19 @@ void tupleDetail(Format& format, const std::tuple<Ts...>& value)
 }
 
 template <typename T1, typename T2>
-void tupleDetail(Format& format, const std::pair<T1, T2>& value)
+void sequenceDetail(Format& format, const std::pair<T1, T2>& value)
 {
     auto nextNode = format.nextNode;
 
     format.nextNode = format.getChild(nextNode);
     format.indexStack.push_back(0);
-    tupleTupleDetail(format, std::tuple<T1, T2>(value));
+    tupleSequenceDetail(format, std::tuple<T1, T2>(value));
     format.indexStack.pop_back();
 
     auto child = format.getNextSibling(format.nextNode, true);
 
     if (child == nullptr || child->state.formatSpecifier != '>') {
-        format.error("Invalid tuple format (expected %>)");
+        format.error("Invalid sequence format (expected %>)");
     } else {
         auto& state = child->state;
 
@@ -906,9 +906,9 @@ void tupleDetail(Format& format, const std::pair<T1, T2>& value)
 }
 
 template <typename T>
-void tupleDetail(Format& format, const T& value)
+void sequenceDetail(Format& format, const T& value)
 {
-    format.error("Invalid argument for tuple format");
+    format.error("Invalid argument for sequence format");
 }
 
 template <typename T>
@@ -970,9 +970,9 @@ void printfOne(Format& format, const T& value)
     }
 
     if (state.formatSpecifier == '[') {
-        containerDetail(format, value);
+        loopDetail(format, value);
     } else if (state.formatSpecifier == '<') {
-        tupleDetail(format, value);
+        sequenceDetail(format, value);
     } else {
         printfDetail(format, value);
     }
@@ -993,9 +993,9 @@ void printfNth(Format& format, size_t index, const T& value, const Ts&... ts)
 
     if (index == 1) {
         if (state.formatSpecifier == '[') {
-            containerDetail(format, value);
+            loopDetail(format, value);
         } else if (state.formatSpecifier == '<') {
-            tupleDetail(format, value);
+            sequenceDetail(format, value);
         } else {
             printfDetail(format, value);
         }
