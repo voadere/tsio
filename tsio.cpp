@@ -547,7 +547,7 @@ void tsioImplementation::FormatState::parse(const char*& f)
         setSpecial();
         f = format - 1;
     } else {
-        if (ch == '%' || ch == 'T' || ch == '{' || ch == '}') {
+        if (ch == '%' || ch == 'T' || ch == '{' || ch == '}' || ch == 'N') {
             setSpecial();
         }
 
@@ -772,6 +772,27 @@ bool tsioImplementation::Format::handleSpecialNodes(FormatNode*& node)
 
         tabTo(state.width, state.type & alternative);
         node = node->next;
+    } else if (spec == 'N') {
+        if (state.prefixSize != 0) {
+            dest.append(state.prefix, state.prefixSize);
+        }
+
+        if (indexStack.empty()) {
+            error("%N format is only valid inside rpeatimg, container and tuple formats");
+        } else {
+            auto index = indexStack.back();
+
+            if (!(state.type & alternative)) {
+                index++;
+            }
+
+            outputNumber<10>(dest, index, state.width,
+                    state.precisionGiven() ? state.precision : 1, state.type,
+                    state.fillCharacter);
+        }
+
+
+        node = node->next;
     } else if (spec == '{') {
         if (state.prefixSize != 0) {
             dest.append(state.prefix, state.prefixSize);
@@ -786,7 +807,8 @@ bool tsioImplementation::Format::handleSpecialNodes(FormatNode*& node)
 
             node = node->next;
         } else {
-            push(node, state.width);
+            pushRepeat(node, state.width);
+            indexStack.push_back(0);
             node = child;
         }
     } else if (spec == '}') {
@@ -794,14 +816,16 @@ bool tsioImplementation::Format::handleSpecialNodes(FormatNode*& node)
             dest.append(state.prefix, state.prefixSize);
         }
 
-        if (!stack.empty()) {
-            auto& element = stack.back();
+        if (!repeatStack.empty()) {
+            auto& element = repeatStack.back();
 
             if ((element.count--) == 0) {
                 node = element.node->next;
-                stack.pop_back();
+                repeatStack.pop_back();
+                indexStack.pop_back();
             } else {
                 node = element.node->child;
+                indexStack.back()++;
             }
         } else {
             node = node->next;
@@ -842,9 +866,8 @@ tsioImplementation::FormatNode* tsioImplementation::Format::getChild(FormatNode*
 {
     auto child = node->child;
     auto& state = child->state;
-    auto spec = state.formatSpecifier;
 
-    if (spec == '%' || spec == 'T' || spec == '{') {
+    if (state.special()) {
         return getNextSibling(child, true);
     }
 

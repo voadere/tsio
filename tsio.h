@@ -364,9 +364,9 @@ struct Format
     static void printTree(std::ostream& os, FormatNode* node, unsigned indent);
     void dump();
 
-    struct StackElement
+    struct RepeatStackElement
     {
-        StackElement(FormatNode* n, size_t c) : node(n), count(c)
+        RepeatStackElement(FormatNode* n, size_t c) : node(n), count(c)
         {
         }
 
@@ -374,10 +374,10 @@ struct Format
         size_t count;
     };
 
-    void push(FormatNode* node, size_t count)
+    void pushRepeat(FormatNode* node, size_t count)
     {
         if (count != 0) {
-            stack.emplace_back(node, count - 1);
+            repeatStack.emplace_back(node, count - 1);
         }
     }
 
@@ -467,7 +467,8 @@ struct Format
     FormatNodes* chuncks = &nodes;
     bool errorGiven = false;
     bool positional = false;
-    std::vector<StackElement> stack;
+    std::vector<RepeatStackElement> repeatStack;
+    std::vector<size_t> indexStack;
     Buffer dest;
 };
 
@@ -675,15 +676,14 @@ void containerDetail(Format& format, const T& value)
     using std::begin;
     using std::end;
 
-    auto child = format.getChild(nextNode);
-
-    if (child->state.formatSpecifier == ']') {
-        format.error(child, "Missing format");
-        return;
-    }
-
+    format.indexStack.push_back(0);
     for (auto b = begin(value), e = end(value); b != e;) {
         auto child = format.getChild(nextNode);
+
+        if (child->state.formatSpecifier == ']') {
+            format.error(child, "Missing format");
+            break;
+        }
 
         format.nextNode = child;
         auto& state = child->state;
@@ -713,8 +713,11 @@ void containerDetail(Format& format, const T& value)
                 dest.append(state.prefix, state.prefixSize);
             }
         }
+
+        format.indexStack.back()++;
     }
 
+    format.indexStack.pop_back();
     format.nextNode = nextNode;
 }
 
@@ -761,19 +764,24 @@ tupleContainerDetail(Format& format, const std::tuple<Tp...>& value)
     }
 
     format.nextNode = nextNode;
+    format.indexStack.back()++;
     tupleContainerDetail<I + 1, Tp...>(format, value);
 }
 
 template <typename... Ts>
 void containerDetail(Format& format, const std::tuple<Ts...>& value)
 {
+    format.indexStack.push_back(0);
     tupleContainerDetail(format, value);
+    format.indexStack.pop_back();
 }
 
 template <typename T1, typename T2>
 void containerDetail(Format& format, const std::pair<T1, T2>& value)
 {
+    format.indexStack.push_back(0);
     tupleContainerDetail(format, std::tuple<T1, T2>(value));
+    format.indexStack.pop_back();
 }
 
 template<std::size_t I = 0, typename... Tp>
@@ -813,6 +821,7 @@ tupleTupleDetail(Format& format, const std::tuple<Tp...>& value)
 
     format.nextNode = format.getNextSibling(format.nextNode);
 
+    format.indexStack.back()++;
     if (I + 1 < sizeof...(Tp)) {
         tupleTupleDetail<I + 1, Tp...>(format, value);
     }
@@ -822,6 +831,7 @@ template <typename... Ts>
 void tupleDetail(Format& format, const std::tuple<Ts...>& value)
 {
     auto nextNode = format.nextNode;
+    format.indexStack.push_back(0);
 
     format.nextNode = format.getChild(nextNode);
 
@@ -849,6 +859,7 @@ void tupleDetail(Format& format, const std::tuple<Ts...>& value)
             }
 
             format.nextNode = format.getNextSibling(format.nextNode);
+            format.indexStack.back()++;
         }
     } else {
         tupleTupleDetail(format, value);
@@ -865,6 +876,7 @@ void tupleDetail(Format& format, const std::tuple<Ts...>& value)
         }
     }
 
+    format.indexStack.pop_back();
     format.nextNode = nextNode;
 }
 
@@ -874,7 +886,9 @@ void tupleDetail(Format& format, const std::pair<T1, T2>& value)
     auto nextNode = format.nextNode;
 
     format.nextNode = format.getChild(nextNode);
+    format.indexStack.push_back(0);
     tupleTupleDetail(format, std::tuple<T1, T2>(value));
+    format.indexStack.pop_back();
 
     auto child = format.getNextSibling(format.nextNode, true);
 
@@ -900,7 +914,7 @@ void tupleDetail(Format& format, const T& value)
 template <typename T>
 void printfOne(Format& format, const T& value)
 {
-    if (format.nextNode == nullptr && format.stack.empty()) {
+    if (format.nextNode == nullptr && format.repeatStack.empty()) {
         format.error("Extraneous parameter or missing format specifier");
         return;
     }

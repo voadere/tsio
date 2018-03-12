@@ -504,6 +504,30 @@ static void testCFormat()
 
 }
 
+static void testIndex()
+{
+    std::string text;
+
+    text = fstring("%5{%5N%}");
+    expect("    1    2    3    4    5", text);
+
+    text = fstring("%5{%#5N%}");
+    expect("    0    1    2    3    4", text);
+
+    auto t = std::make_tuple(1, 2.3, "four");
+
+    text = fstring("%[%5N: %s%]", t);
+    expect("    1: 1    2: 2.3    3: four", text);
+
+    std::vector<int> v = {10, 200, 3000};
+
+    text = fstring("%[%5N: %s%]", v);
+    expect("    1: 10    2: 200    3: 3000", text);
+
+    text = fstring("%[%#5N: %s%]", v);
+    expect("    0: 10    1: 200    2: 3000", text);
+}
+
 static void run()
 {
     testStringIntegral();
@@ -517,6 +541,7 @@ static void run()
     testPositional();
     testTuple();
     testCFormat();
+    testIndex();
     extensions();
 }
 
