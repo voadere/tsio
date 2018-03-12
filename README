@@ -1,4 +1,6 @@
-tsio: type safe, printf compatible sprintf and fprintf functions extended
+tsio: printf for modern C++.
+
+      type safe, printf compatible sprintf and fprintf functions extended
       to easely format containers and tuples.
 
       An io manipulator that allows setting ostream flags according to a format.
@@ -28,9 +30,6 @@ tsio: type safe, printf compatible sprintf and fprintf functions extended
   Of course, clashes with names in your application may preclude the use
   of the 'using namespace tsio;' statement.
 
-  A test program is provided that exhaustively checks the results of
-  'fmt::sprintf' amd 'std::sprintf' for equality.
-
   The 'tsio::fmt' io manipulator sets stream flags according to
   a format.  It uses the same formats as sprintf, but the effects are
   not always identical.  Some formats can not be reproduced exactly.
@@ -43,7 +42,7 @@ tsio: type safe, printf compatible sprintf and fprintf functions extended
 
   The tsio package implements many extensions to the standard printf format such as
   new and enhanced format specifiers, centering text, fill characters, formatting
-  vectors, arrays and sets, repeating formats and more.
+  all containers and tuples, repeating formats and more.
   For more information, refer to the documentation in the tsio.odt or tsio.pdf file.
 
 - Examples:
@@ -53,5 +52,5 @@ tsio: type safe, printf compatible sprintf and fprintf functions extended
 - Test:
   
   The 'test' directory contains a test program (tsioTest) that checks a very large
-  variety of formats on many argument type.
+  variety of formats on many argument types.
   It compares the results of tsio::sprintf with std::sprintf.

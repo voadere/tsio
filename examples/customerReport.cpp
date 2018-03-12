@@ -79,8 +79,13 @@ static void withOstream(const ReportData& report, unsigned year, unsigned quarte
     std::cout << "Yearly report for " << std::setw(4) << year << "Q" << quarter << '\n' <<
         std::setw(72) << std::setfill('-') << "" << std::setfill(' ') << '\n';
 
+    unsigned lineNumber = 0;
+
     for (const auto& customer : report) {
-        std::cout << std::setw(5) << std::get<0>(customer) << " " <<
+        lineNumber++;
+
+        std::cout << std::setw(3) << lineNumber << " " <<
+            std::setw(5) << std::get<0>(customer) << " " <<
             std::setw(20) << std::left << std::get<1>(customer) << std::right <<
             std::setw(10) << std::setprecision(2) << std::fixed << std::get<2>(customer) <<
             "     ";
@@ -120,8 +125,13 @@ static void step1(const ReportData& report, unsigned year, unsigned quarter)
     std::cout << "Yearly report for " << std::setw(4) << year << "Q" << quarter << '\n' <<
         std::setw(72) << std::setfill('-') << "" << std::setfill(' ') << '\n';
 
+    unsigned lineNumber = 0;
+
     for (const auto& customer : report) {
-        std::cout << std::setw(5) << std::get<0>(customer) << " " <<
+        lineNumber++;
+
+        std::cout << std::setw(3) << lineNumber << " " <<
+            std::setw(5) << std::get<0>(customer) << " " <<
             std::setw(20) << std::left << std::get<1>(customer) << std::right <<
             std::setw(10) << std::setprecision(2) << std::fixed << std::get<2>(customer) <<
             "     ";
@@ -158,8 +168,13 @@ static void step2(const ReportData& report, unsigned year, unsigned quarter)
     std::cout << "Yearly report for " << std::setw(4) << year << "Q" << quarter << '\n' <<
         std::setw(72) << std::setfill('-') << "" << std::setfill(' ') << '\n';
 
+    unsigned lineNumber = 0;
+
     for (const auto& customer : report) {
-        std::cout << std::setw(5) << std::get<0>(customer) << " " <<
+        lineNumber++;
+
+        std::cout << std::setw(3) << lineNumber << " " <<
+            std::setw(5) << std::get<0>(customer) << " " <<
             std::setw(20) << std::left << std::get<1>(customer) << std::right <<
             std::setw(10) << std::setprecision(2) << std::fixed << std::get<2>(customer) <<
             "     ";
@@ -191,13 +206,20 @@ static void step3(const ReportData& report, unsigned year, unsigned quarter)
     std::cout << "Yearly report for " << std::setw(4) << year << "Q" << quarter << '\n' <<
         std::setw(72) << std::setfill('-') << "" << std::setfill(' ') << '\n';
 
+    unsigned lineNumber = 0;
+
     for (const auto& customer : report) {
-        oprintf("%5d %-20s%10.2f     %[%6.2f%%%]\n", std::get<0>(customer),
-        //      ^^^^                            format the customer number
-        //           ^^^^^                      format the customer name
-        //                ^^^^^                 format the quarterly total
-        //                           ^^^^^^^^^^ format the monthly data
-                std::get<1>(customer), std::get<2>(customer), std::get<3>(customer));
+        lineNumber++;
+
+        oprintf("%3d %5d %-20s%10.2f     %[%6.2f%%%]\n",
+        //       ^^^                                format for the line number
+        //           ^^^                            format the customer number
+        //               ^^^^^                      format the customer name
+        //                    ^^^^^                 format the quarterly total
+        //                               ^^^^^^^^^^ format the monthly data
+                lineNumber,
+                std::get<0>(customer), std::get<1>(customer), std::get<2>(customer),
+                std::get<3>(customer));
     }
 
     std::cout << std::setw(72) << std::setfill('-') << "" << std::setfill(' ') << '\n';
@@ -219,14 +241,17 @@ static void step4(const ReportData& report, unsigned year, unsigned quarter)
     std::cout << "Yearly report for " << std::setw(4) << year << "Q" << quarter << '\n' <<
         std::setw(72) << std::setfill('-') << "" << std::setfill(' ') << '\n';
 
+    unsigned lineNumber = 0;
+
     for (const auto& customer : report) {
-        oprintf("%<%5d %-20s%10.2f     %[%6.2f%%%]\n%>", customer);
-        //       ^^                                    start of tuple format
-        //         ^^^                                 format for element 0
-        //             ^^^^^                           format for element 1
-        //                  ^^^^^                      format for element 2
-        //                             ^^^^^^^^^^^     format for element 3
-        //                                          ^^ end of tuple format
+        oprintf("%3d %<%5d %-20s%10.2f     %[%6.2f%%%]\n%>", lineNumber, customer);
+        //       ^^^                                       format for the line number
+        //           ^^                                    start of tuple format
+        //             ^^^                                 format for element 0
+        //                 ^^^^^                           format for element 1
+        //                      ^^^^^                      format for element 2
+        //                                 ^^^^^^^^^^^     format for element 3
+        //                                              ^^ end of tuple format
     }
 
     std::cout << std::setw(72) << std::setfill('-') << "" << std::setfill(' ') << '\n';
@@ -239,6 +264,9 @@ static void step4(const ReportData& report, unsigned year, unsigned quarter)
  *  }
  *
  * with another container format
+ *
+ * It also uses the %N format to print the index in the container,
+ * which is equal to the line number.
  */
 
 static void step5(const ReportData& report, unsigned year, unsigned quarter)
@@ -246,9 +274,10 @@ static void step5(const ReportData& report, unsigned year, unsigned quarter)
     std::cout << "Yearly report for " << std::setw(4) << year << "Q" << quarter << '\n' <<
         std::setw(72) << std::setfill('-') << "" << std::setfill(' ') << '\n';
 
-    oprintf("%[%<%5d %-20s%10.2f     %[%6.2f%%%]\n%>%]", report);
-    //       ^^                                     ^^ another container format
-    //         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^   format repeated for each element
+    oprintf("%[%3N %<%5d %-20s%10.2f     %[%6.2f%%%]\n%>%]", report);
+    //       ^^                                     ^^   another container format
+    //         ^^^                                       format for the index
+    //             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ format repeated for each element
 
     std::cout << std::setw(72) << std::setfill('-') << "" << std::setfill(' ') << '\n';
 }
@@ -275,7 +304,7 @@ static void step6(const ReportData& report, unsigned year, unsigned quarter)
     oprintf("Yearly report for %dQ%d\n%72{-%}\n", year, quarter);
     //                                ^^^^^^^ generate 72 dashes.
 
-    oprintf("%[%<%5d %-20s%10.2f     %[%6.2f%%%]\n%>%]", report);
+    oprintf("%[%3N %<%5d %-20s%10.2f     %[%6.2f%%%]\n%>%]", report);
 
     oprintf("%72{-%}\n");
     //       ^^^^    start of repeat format; repeats 72 times
@@ -296,7 +325,7 @@ static void step6(const ReportData& report, unsigned year, unsigned quarter)
 static void withPrintf(const ReportData& report, unsigned year, unsigned quarter)
 {
     oprintf("Yearly report for %dQ%d\n"
-            "%72{-%}\n%[%<%5d %-20s%10.2f     %[%6.2f%%%]\n%>%]%72{-%}\n",
+            "%72{-%}\n%[%3N %<%5d %-20s%10.2f     %[%6.2f%%%]\n%>%]%72{-%}\n",
             year, quarter, report);
 }
 
@@ -313,6 +342,7 @@ static void overview(const ReportData& report, unsigned year, unsigned quarter)
             "%72{-%}"                   // 72 dashes and a new line 
             "\n"                        // new line
             "%["                        // start report vector
+              "%3N "                    // container index
               "%<"                      // start customer tuple
                 "%5d "                  // customer number
                 "%-20s"                 // customer name
@@ -342,8 +372,13 @@ static void withFmt(const ReportData& report, unsigned year, unsigned quarter)
     std::cout << "Yearly report for " << fmt("%4d") << year << "Q" << quarter << '\n' <<
         fmt("%-\"-72s") << "" << '\n';
 
+    unsigned lineNumber = 0;
+
     for (const auto& customer : report) {
-        std::cout << fmt("%5d") << std::get<0>(customer) << " " <<
+        lineNumber++;
+
+        std::cout << fmt("%3d") << lineNumber << " " <<
+            fmt("%5d") << std::get<0>(customer) << " " <<
             fmt("%-20s") << std::get<1>(customer) << 
             fmt("%10.2f") << std::get<2>(customer) <<
             "     ";
