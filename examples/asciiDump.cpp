@@ -125,9 +125,9 @@ static void overview(const char* fileName, unsigned format)
             case asciiFormat:
                 oprintf("%2{"           // repeat twice
                           "%08x  "      // print totalCount
-                          "%["          // begin container format
+                          "%["          // begin loop format
                             "%#5C"      // print one character or escape sequence
-                          "%]"          // end container format
+                          "%]"          // end loop format
                           "%#60T"       // skip to column 60
                           "%S"          // print string; replace unprintable width '.'
                           "\n"          // new linme
@@ -139,9 +139,9 @@ static void overview(const char* fileName, unsigned format)
 
             case hexFormat:
                 oprintf("%08x  "        // print totalCount
-                        "%["            // begin container format
+                        "%["            // begin loop format
                           "%02x "       // print a character in hex
-                        "%]"            // end container format
+                        "%]"            // end loop format
                         "%#70T"         // skip to column 70
                         "%S"            // print string; replace unprintable width '.'
                         "\n",           // new linme
@@ -151,9 +151,9 @@ static void overview(const char* fileName, unsigned format)
             case classicFormat:
                 oprintf("%08x "
                         "%2{ "          // repeat twice
-                          "%["          // begin container forma
+                          "%["          // begin loop forma
                             "%02x "     // print a character in hex
-                          "%]"          // end container format
+                          "%]"          // end loop format
                         "%}"            // end repeat
                         "%#61T"         // skip to column 61
                         "|"             // verical bar

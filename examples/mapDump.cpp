@@ -32,7 +32,7 @@ static void dump()
 }
 
 /*
- * the print function uses a container format to add decorations ( {} ) around
+ * the print function uses a loop format to add decorations ( {} ) around
  * each map element.
  */
 
@@ -42,7 +42,7 @@ static void print()
 }
 
 /*
- * The show function uses a tuple format to allow different formats for
+ * The show function uses a sequence format to allow different formats for
  * the key and for the value of each element
  */
 
@@ -64,15 +64,15 @@ static void shine()
 static void  overview()
 {
     oprintf("{\n"               // starting brace
-            "%[   "             // start container format for map
-              "%<"              // start tuple format for map element
+            "%[   "             // start loop format for map
+              "%<"              // start sequence format for map element
               "{ "              // generate open brace
                 "%2d: "         // format for element key
-                "%#["           // start container format for element value
+                "%#["           // start loop format for element value
                   "%-s, "       // format for element of element and , separator
-                "%] }"          // end container format for element value
-              "%>\n"            // end tuple format for map element
-            "%]}\n",            // end container format for map
+                "%] }"          // end loop format for element value
+              "%>\n"            // end sequence format for map element
+            "%]}\n",            // end loop format for map
             m);                 
 }
 
