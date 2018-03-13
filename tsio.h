@@ -188,7 +188,6 @@ struct FormatState
 
     void parse(const char*& format);
 
-    const char* unParse() const;
     const char* unParseForFloat(bool longDouble) const;
 
     bool widthGiven() const
