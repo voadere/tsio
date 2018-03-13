@@ -131,7 +131,7 @@ void test(const T& value,
     }
 }
 
-static void testStringIntegral()
+static void testIntegral()
 {
     int intValues[] = {1234, -1234, 1, -1, 0, int(0x80000000)};
     int spec1s[] = {-1, 3, 15, 0};
@@ -164,22 +164,31 @@ static void testStringIntegral()
 
 }
 
-static void testStringFloatingPoint()
+static void testFloatingPoint()
 {
-    double floatValues[] = {12.34, 987.0, 56e35, 0., 456.78, -456.78};
+    long double longValues[] = {56e35, 12.34, 987.0, 56e35, 0., 456.78, -456.78};
+    double floatValues[] = {56e35, 12.34, 987.0, 56e35, 0., 456.78, -456.78};
     int spec1s[] = {15, 0, -1};
     int spec2s[] = {3, 0, -1, -2};
 
     for (auto spec1 : spec1s) {
         for (auto spec2 : spec2s) {
             for (auto value : floatValues) {
-                test(value, "aAfFeEgG", spec1, spec2);
+                test(value, "fFeEgGaA", spec1, spec2);
+            }
+        }
+    }
+
+    for (auto spec1 : spec1s) {
+        for (auto spec2 : spec2s) {
+            for (auto value : longValues) {
+                test(value, "fFeEgGaA", spec1, spec2, nullptr, nullptr, "L");
             }
         }
     }
 }
 
-static void testStringPointer()
+static void testPointer()
 {
     const char* t1 = "Another test";
 
@@ -195,7 +204,7 @@ static void testStringPointer()
     }
 }
 
-static void testStringDynamics()
+static void testDynamics()
 {
     int intValues[] = {1234, -1234, 1, -1, 0, int(0x80000000)};
     double floatValues[] = {1234.56, -1234.56, -1., 0.};
@@ -242,7 +251,7 @@ static void testPrintfN()
     expect(5, sSize);
 }
 
-static void testPrintString()
+static void testString()
 {
     std::string text;
     std::string s = "abcde";
@@ -307,7 +316,7 @@ static void testBinaryFormat() {
     expect("10 0b10011010010 1100011 0B10011010010100", text);
 }
 
-static void extensions()
+static void testExtensions()
 {
     std::string text = fstring("%C %C", '\x12', 'a');
 
@@ -371,6 +380,9 @@ static void extensions()
     text = fstring("%+'*\"@20d", 123);
     expect("+****************123", text);
 
+    text = fstring("%+^'*\"@20.3f", 123.456);
+    expect("@@@@@@+123.456@@@@@@", text);
+
     text = fstring("%+\"@20d", 123);
     expect("@@@@@@@@@@@@@@@@+123", text);
 
@@ -411,12 +423,6 @@ static void extensions()
 
     text = fstring("%*4${!%}", 1, 22, 333, 2);
     expect("!!", text);
-
-    text = fstring("%[v=%d, %]", 66);
-    expect("v=66, ", text);
-
-    text = fstring("%#[v=%d, %]", 66);
-    expect("v=66", text);
 
     std::vector<int> v1 = {9, 8, 7, 6};
     double fa[] = {1.2, 2.3, 3.4, 4.55555};
@@ -530,19 +536,19 @@ static void testIndex()
 
 static void run()
 {
-    testStringIntegral();
-    testStringFloatingPoint();
-    testStringPointer();
-    testStringDynamics();
+    testIntegral();
+    testFloatingPoint();
+    testPointer();
+    testDynamics();
     testPrintfN();
-    testPrintString();
+    testString();
     testRepeatingFormats();
     testBinaryFormat();
     testPositional();
     testTuple();
     testCFormat();
     testIndex();
-    extensions();
+    testExtensions();
 }
 
 static void test()

@@ -555,7 +555,58 @@ void tsioImplementation::FormatState::parse(const char*& f)
     }
 }
 
-// unparse generates a standard format.  Extensions are mostly not generated.
+const char* tsioImplementation::FormatState::unParseForFloat(bool longDouble) const
+{
+    // the string is built back to front.
+    buf[30] = 0;
+    char* pt = buf + 30;
+
+    *(--pt) = (formatSpecifier == 's') ? 'g' : formatSpecifier;
+
+    if (longDouble) {
+        *(--pt) = 'L';
+    }
+
+    if (precisionGiven()) {
+        if (widthDynamic()) {
+            *(--pt) = '*';
+        } else {
+            unsigned tmp = precision;
+
+            do {
+                unsigned q = tmp / 10;
+                unsigned r = tmp - q * 10;
+
+                *(--pt) = char(r + '0');
+                tmp = q;
+            } while (tmp != 0);
+        }
+
+        *(--pt) = '.';
+    }
+
+    // width is defaulted
+    // Only some flags are returned.
+
+    if (type != 0) {
+        if (type & plusIfPositive) {
+            *(--pt) = '+';
+        }
+
+        if (type & spaceIfPositive) {
+            *(--pt) = ' ';
+        }
+
+        if (type & alternative) {
+            *(--pt) = '#';
+        }
+    }
+
+    *(--pt) = '%';
+
+    return pt;
+}
+
 const char* tsioImplementation::FormatState::unParse() const
 {
     // the string is built back to front.
@@ -670,6 +721,7 @@ tsioImplementation::FormatNode* tsioImplementation::Format::buildTree()
         auto& state = node->state;
         const char* fmt = format;
 
+        state.start = fmt;
         state.prefix = fmt;
         while (*fmt != 0 && *(fmt++) != '%') {
             // nop
@@ -678,12 +730,15 @@ tsioImplementation::FormatNode* tsioImplementation::Format::buildTree()
         if (*fmt == 0) {
             state.prefixSize = unsigned(fmt - state.prefix);
             state.setSpecial();
+            state.size = fmt - format;
             break;
         }
 
         state.prefixSize = unsigned(fmt - state.prefix - 1);
 
         state.parse(fmt);
+
+        state.size = fmt - format;
 
         format = fmt;
         if (state.position != 0 || state.widthPosition != 0 || state.precisionPosition != 0) {
@@ -896,19 +951,12 @@ void tsioImplementation::Format::printTree(std::ostream& os, FormatNode* node, u
     const auto& state = node->state;
 
     for (unsigned i = 0; i < indent; ++i) {
-        os << ". ";
+        os << "  ";
     }
 
-    os << state.unParse();
-    if (state.prefixSize > 0) {
-        os << " prefix = '";
-
-        for (unsigned i = 0; i < state.prefixSize; ++i) {
-            os << state.prefix[i];
-        }
-
-        os << "'";
-    }
+    os << '"';
+    os.write(state.start, state.size);
+    os << '"';
 
     os << '\n';
 
@@ -1138,6 +1186,63 @@ void tsioImplementation::printfDetail(Format& format, const char* value)
     }
 }
 
+static void outputFloatTmp(tsioImplementation::Format& format,
+        const tsioImplementation::Buffer& tmp)
+{
+    using namespace tsioImplementation;
+
+    auto& state = format.nextNode->state;
+    auto& dest = format.dest;
+    size_t bytesNeeded = tmp.size();
+
+    if (!state.widthGiven() || bytesNeeded > state.width) {
+        dest.append(tmp.data(), bytesNeeded);
+    } else {
+        unsigned type = state.type;
+        size_t size = state.width;
+        char fillChar = (type & (alfafill | numericfill)) ? state.fillCharacter : ' ';
+        size_t destSize = dest.size();
+        size_t fillSize = size - bytesNeeded;
+
+        dest.widen(size);
+
+        char* pt = dest.data() + destSize;
+
+        if (type & leftJustify) {
+            pt = copy(pt, tmp.data(), tmp.size());
+            fill(pt, fillChar, fillSize);
+        } else if (type & centerJustify) {
+            size_t offset = fillSize / 2;
+            size_t rest = size - offset;
+
+            pt = fill(pt, fillChar, offset);
+            pt = copy(pt, tmp.data(), tmp.size());
+            fill(pt, fillChar, rest);
+        } else if (type & numericfill) {
+            const char* prefix = tmp.data();
+            const char* actualPointer = prefix;
+
+            if (*actualPointer == ' ' || *actualPointer == '+' || *actualPointer == '-') {
+                actualPointer++;
+            }
+
+            if (*actualPointer == '0' && (actualPointer[1] == 'x' || actualPointer[1] == 'X')) {
+                actualPointer += 2;
+            }
+
+            size_t prefixSize = actualPointer - tmp.data();
+            size_t actualDigits = tmp.size() - prefixSize;
+
+            pt = copy(pt, prefix, prefixSize);
+            pt = fill(pt, fillChar, fillSize);
+            copy(pt, actualPointer, actualDigits);
+        } else {
+            pt = fill(pt, fillChar, fillSize);
+            pt = copy(pt, tmp.data(), tmp.size());
+        }
+    }
+}
+
 void tsioImplementation::printfDetail(Format& format, double value)
 {
     auto& state = format.nextNode->state;
@@ -1154,33 +1259,25 @@ void tsioImplementation::printfDetail(Format& format, double value)
         case 'F':
         case 'g':
         case 'G': {
-            const char* f;
+            const char* f = state.unParseForFloat(false);
+            Buffer tmp;
+            char* pt = tmp.data();
+            size_t capacity = tmp.capacity();
 
-            if (spec == 's') {
-                FormatState newFlags(state);
-
-                newFlags.formatSpecifier = 'g';
-                f = newFlags.unParse();
-            } else {
-                f = state.unParse();
-            }
-
-            size_t destSize = dest.size();
-            char* pt = dest.data() + destSize;
-            size_t remainingSize = dest.capacity() - dest.size();
-
-            int s = snprintf(pt, remainingSize, f, value);
+            int s = snprintf(pt, capacity, f, value);
 
             if (s < 0) {
                 return;
             }
 
-            dest.widen(s);
+            tmp.widen(s);
 
-            if (s > int(remainingSize)) {
-                pt = dest.data() + destSize;
+            if (s > int(capacity)) {
+                pt = dest.data();
                 sprintf(pt, f, value);
             }
+
+            outputFloatTmp(format, tmp);
         }
 
         break;
@@ -1193,6 +1290,50 @@ void tsioImplementation::printfDetail(Format& format, double value)
 void tsioImplementation::printfDetail(Format& format, float value)
 {
     printfDetail(format, double(value));
+}
+
+void tsioImplementation::printfDetail(Format& format, long double value)
+{
+    auto& state = format.nextNode->state;
+    auto& dest = format.dest;
+    char spec = state.formatSpecifier;
+
+    switch (spec) {
+        case 's':
+        case 'a':
+        case 'A':
+        case 'e':
+        case 'E':
+        case 'f':
+        case 'F':
+        case 'g':
+        case 'G': {
+            const char* f = state.unParseForFloat(true);
+            Buffer tmp;
+            char* pt = tmp.data();
+            size_t capacity = tmp.capacity();
+
+            int s = snprintf(pt, capacity, f, value);
+
+            if (s < 0) {
+                return;
+            }
+
+            tmp.widen(s);
+
+            if (s > int(capacity)) {
+                pt = dest.data();
+                sprintf(pt, f, value);
+            }
+
+            outputFloatTmp(format, tmp);
+        }
+
+        break;
+
+        default:
+            format.error("Invalid format '", spec, "' for floating point value");
+    }
 }
 
 void tsioImplementation::printfDetail(Format& format, bool value)

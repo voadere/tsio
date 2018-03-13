@@ -189,6 +189,7 @@ struct FormatState
     void parse(const char*& format);
 
     const char* unParse() const;
+    const char* unParseForFloat(bool longDouble) const;
 
     bool widthGiven() const
     {
@@ -281,8 +282,8 @@ struct FormatState
 
     void reset()
     {
+        start = nullptr;
         prefix = nullptr;
-        suffix = nullptr;
         width = 0;
         precision = 0;
         position = 0;
@@ -290,12 +291,13 @@ struct FormatState
         precisionPosition = 0;
         prefixSize = 0;
         type = 0;
+        size = 0;
         formatSpecifier = 0;
         fillCharacter = ' ';
     }
 
+    const char* start;
     const char* prefix;
-    const char* suffix;
     unsigned width;
     unsigned precision;
     unsigned position;
@@ -303,6 +305,7 @@ struct FormatState
     unsigned precisionPosition;
     unsigned prefixSize;
     unsigned type;
+    unsigned size;
     char formatSpecifier;
     char fillCharacter;
 
@@ -482,6 +485,7 @@ void outputPointer(Buffer& dest,
 void printfDetail(Format& format, const std::string& value);
 void printfDetail(Format& format, const char* value);
 void printfDetail(Format& format, double value);
+void printfDetail(Format& format, long double value);
 void printfDetail(Format& format, float value);
 void printfDetail(Format& format, bool value);
 void printfDetail(Format& format, long long sValue, unsigned long long uValue,
@@ -630,41 +634,7 @@ int toSpec(Format& format, const T& value)
 template <typename T, typename std::enable_if<!std::is_class<T>{} && !std::is_array<T>{}, int>::type = 0>
 void loopDetail(Format& format, const T& value)
 {
-    auto& dest = format.dest;
-    auto nextNode = format.nextNode;
-
-    auto child = format.getChild(nextNode);
-
-    format.nextNode = child;
-    auto& state = child->state;
-
-    if (state.prefixSize != 0) {
-        dest.append(state.prefix, state.prefixSize);
-    }
-
-    if (state.formatSpecifier == ']') {
-        format.error("Missing format");
-    } else if (state.formatSpecifier == '[') {
-        loopDetail(format, value);
-    } else if (state.formatSpecifier == '<') {
-        sequenceDetail(format, value);
-    } else {
-        printfDetail(format, value);
-    }
-
-    child = format.getNextSibling(child);
-
-    if (child == nullptr || child->state.formatSpecifier != ']') {
-        format.error(child, "Invalid loop format (missing %])");
-    } else if (!(nextNode->state.type & alternative)) {
-        auto& state = child->state;
-
-        if (state.prefixSize != 0) {
-            dest.append(state.prefix, state.prefixSize);
-        }
-    }
-
-    format.nextNode = nextNode;
+    format.error("Invalid argument for loop format");
 }
 
 template <typename T, typename std::enable_if<std::is_class<T>{} || std::is_array<T>{}, int>::type = 0>

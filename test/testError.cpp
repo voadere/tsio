@@ -20,14 +20,15 @@ static void test()
     dest = fstring("  6: %5d:", d);
     dest = fstring("  7: %5f:", i);
 
-    // container formats
+    // loop formats
     dest = fstring("101: %[ %d %}", v);
     dest = fstring("102: %[ %d", v);
     dest = fstring("103: %[ %d %d %]", v);
     dest = fstring("104: %[ %]", v);
     dest = fstring("105: %[ %2{%d%}", v);
+    dest = fstring("106: %[ %d, %]", 66);
 
-    // tuple formats
+    // sequence formats
     dest = fstring("201: %< %d %}", t);
     dest = fstring("202: %< %d", t);
     dest = fstring("203: %< %d %}", p);
