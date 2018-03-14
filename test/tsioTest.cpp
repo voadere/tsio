@@ -168,7 +168,7 @@ static void testFloatingPoint()
 {
     long double longValues[] = {56e35, 12.34, 987.0, 56e35, 0., 456.78, -456.78};
     double floatValues[] = {56e35, 12.34, 987.0, 56e35, 0., 456.78, -456.78};
-    int spec1s[] = {15, 0, -1};
+    int spec1s[] = {15, 0, 3, -1};
     int spec2s[] = {3, 0, -1, -2};
 
     for (auto spec1 : spec1s) {

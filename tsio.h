@@ -225,6 +225,12 @@ struct FormatState
         return type & TypeEnum::special;
     }
 
+    bool nonDynamicSpecial() const
+    {
+        return (type & (TypeEnum::widthDynamic | TypeEnum::precisionDynamic | TypeEnum::special)) ==
+            TypeEnum::special;
+    }
+
     void setWidthGiven(bool v = true)
     {
         if (v) {
@@ -288,9 +294,9 @@ struct FormatState
         position = 0;
         widthPosition = 0;
         precisionPosition = 0;
-        prefixSize = 0;
-        type = 0;
         size = 0;
+        type = 0;
+        prefixSize = 0;
         formatSpecifier = 0;
         fillCharacter = ' ';
     }
@@ -302,9 +308,9 @@ struct FormatState
     unsigned position;
     unsigned widthPosition;
     unsigned precisionPosition;
-    unsigned prefixSize;
-    unsigned type;
     unsigned size;
+    unsigned type;
+    unsigned prefixSize;
     char formatSpecifier;
     char fillCharacter;
 
@@ -456,7 +462,7 @@ struct Format
     }
 #endif
 
-    bool handleSpecialNodes(FormatNode*& node);
+    void handleSpecialNodes(FormatNode*& node);
     void getNextNode(bool first = false);
     FormatNode* getNextSibling(FormatNode* node, bool first = false);
     FormatNode* getChild(FormatNode* node);
@@ -474,12 +480,7 @@ struct Format
     Buffer dest;
 };
 
-void outputPointer(Buffer& dest,
-                   uintptr_t pNumber,
-                   int size,
-                   int precision,
-                   unsigned type,
-                   char fillCharacter);
+void outputPointer(Format& format, uintptr_t pNumber);
 
 void printfDetail(Format& format, const std::string& value);
 void printfDetail(Format& format, const char* value);
@@ -490,8 +491,9 @@ void printfDetail(Format& format, bool value);
 void printfDetail(Format& format, long long sValue, unsigned long long uValue,
         bool isSigned);
 
-template <typename T, typename std::enable_if<std::is_integral<T>{}, int>::type = 0>
-void printfDetail(Format& format, const T& value)
+template <typename T>
+typename std::enable_if<std::is_integral<T>::value>::type
+printfDetail(Format& format, const T& value)
 {
     typename std::make_signed<T>::type sValue = value;
     typename std::make_unsigned<T>::type uValue = value;
@@ -509,12 +511,7 @@ void printfDetail(Format& format, T* value)
 
     switch (spec) {
         case 'p':
-            outputPointer(dest,
-                         pValue,
-                         state.width,
-                         state.precision,
-                         state.type,
-                         state.fillCharacter);
+            outputPointer(format, pValue);
 
             break;
 
@@ -537,18 +534,12 @@ template <typename T>
 void printfDetail(Format& format, const T* value)
 {
     auto& state = format.nextNode->state;
-    auto& dest = format.dest;
     char spec = state.formatSpecifier;
     uintptr_t pValue = uintptr_t(value);
 
     switch (spec) {
         case 'p':
-            outputPointer(dest,
-                         pValue,
-                         state.width,
-                         state.precision,
-                         state.type,
-                         state.fillCharacter);
+            outputPointer(format, pValue);
 
             break;
 
@@ -557,8 +548,9 @@ void printfDetail(Format& format, const T* value)
     }
 }
 
-template <typename T, typename std::enable_if<std::is_class<T>{}, int>::type = 0>
-void printfDetail(Format& format, const T& value)
+template <typename T>
+typename std::enable_if<std::is_class<T>::value>::type
+printfDetail(Format& format, const T& value)
 {
     for (const auto& v : value) {
         printfDetail(format, v);
@@ -617,27 +609,31 @@ void printfDetail(Format& format, const std::pair<T1, T2>& value)
     printfDetail(format, std::tuple<T1, T2>(value));
 }
 
-template <typename T, typename std::enable_if<!std::is_integral<T>{}, int>::type = 0>
-int toSpec(Format& format, const T& value)
+template <typename T>
+typename std::enable_if<!std::is_integral<T>::value, int>::type
+toSpec(Format& format, const T& value)
 {
     format.error("invalid argument type for '*'");
     return 0;
 }
 
-template <typename T, typename std::enable_if<std::is_integral<T>{}, int>::type = 0>
-int toSpec(Format& format, const T& value)
+template <typename T>
+typename std::enable_if<std::is_integral<T>::value, int>::type
+toSpec(Format& format, const T& value)
 {
     return int(value);
 }
 
-template <typename T, typename std::enable_if<!std::is_class<T>{} && !std::is_array<T>{}, int>::type = 0>
-void loopDetail(Format& format, const T& value)
+template <typename T>
+typename std::enable_if<!std::is_class<T>::value && !std::is_array<T>::value>::type
+loopDetail(Format& format, const T& value)
 {
     format.error("Invalid argument for loop format");
 }
 
-template <typename T, typename std::enable_if<std::is_class<T>{} || std::is_array<T>{}, int>::type = 0>
-void loopDetail(Format& format, const T& value)
+template <typename T>
+typename std::enable_if<std::is_class<T>::value || std::is_array<T>::value>::type
+loopDetail(Format& format, const T& value)
 {
     auto nextNode = format.nextNode;
     auto& dest = format.dest;
@@ -1136,11 +1132,11 @@ int addSprintf(Format& format, const Ts&... ts)
 
         if (format.nextNode != nullptr) {
             format.getNextNode(true);
-        }
 
-        if (format.nextNode != nullptr) {
-            if (format.nextNode->state.formatSpecifier != 0) {
-                format.error("Extraneous format or missing parameter");
+            if (format.nextNode != nullptr) {
+                if (format.nextNode->state.formatSpecifier != 0) {
+                    format.error("Extraneous format or missing parameter");
+                }
             }
         }
     }
