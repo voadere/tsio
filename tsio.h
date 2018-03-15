@@ -33,6 +33,7 @@
 #include <cstring>
 #include <iomanip>
 #include <iostream>
+#include <iterator>
 #include <limits>
 #include <malloc.h>
 #include <string>
@@ -572,9 +573,9 @@ printfNth(Format& format, size_t index, const std::tuple<Tp...>& value)
         auto& state = format.nextNode->state;
 
         if (state.formatSpecifier == '[') {
-            loopDetail(format, std::get<I>(value));
+            collectionDetail(format, std::get<I>(value));
         } else if (state.formatSpecifier == '<') {
-            sequenceDetail(format, std::get<I>(value));
+            elementDetail(format, std::get<I>(value));
         } else {
             printfDetail(format, std::get<I>(value));
         }
@@ -624,62 +625,131 @@ toSpec(Format& format, const T& value)
     return int(value);
 }
 
+#if __cplusplus < 201703L
+template <typename T>
+size_t size(const T& t)
+{
+    return t.size();
+}
+
+template <typename T, size_t N>
+size_t size(const T(& t)[N])
+{
+    return N;
+}
+#endif
+
 template <typename T>
 typename std::enable_if<!std::is_class<T>::value && !std::is_array<T>::value>::type
-loopDetail(Format& format, const T& value)
+collectionDetail(Format& format, const T& value)
 {
-    format.error("Invalid argument for loop format");
+    format.error("Invalid argument for collection format");
 }
 
 template <typename T>
 typename std::enable_if<std::is_class<T>::value || std::is_array<T>::value>::type
-loopDetail(Format& format, const T& value)
+collectionDetail(Format& format, const T& value)
 {
     auto nextNode = format.nextNode;
     auto& dest = format.dest;
+    auto& state = format.nextNode->state;
+
+    format.indexStack.push_back(0);
 
     using std::begin;
     using std::end;
 
-    format.indexStack.push_back(0);
-    for (auto b = begin(value), e = end(value); b != e;) {
-        auto child = format.getChild(nextNode);
+    if (!state.widthGiven()) {
+        for (auto b = begin(value), e = end(value); b != e;) {
+            auto child = format.getChild(nextNode);
 
-        if (child->state.formatSpecifier == ']') {
-            format.error(child, "Missing format");
-            break;
-        }
+            if (child == 0 || child->state.formatSpecifier == ']') {
+                format.error(child, "Missing format");
+                break;
+            }
 
-        format.nextNode = child;
-        auto& state = child->state;
-
-        if (state.prefixSize != 0) {
-            dest.append(state.prefix, state.prefixSize);
-        }
-
-        if (state.formatSpecifier == '[') {
-            loopDetail(format, *b);
-        } else if (state.formatSpecifier == '<') {
-            sequenceDetail(format, *b);
-        } else {
-            printfDetail(format, *b);
-        }
-
-        ++b;
-
-        child = format.getNextSibling(child);
-
-        if (child == nullptr || child->state.formatSpecifier != ']') {
-            format.error(child, "Invalid loop format (expected %])");
-        } else if (b != e || !(nextNode->state.type & alternative)) {
+            format.nextNode = child;
             auto& state = child->state;
 
             if (state.prefixSize != 0) {
                 dest.append(state.prefix, state.prefixSize);
             }
-        }
 
-        format.indexStack.back()++;
+            if (state.formatSpecifier == '[') {
+                collectionDetail(format, *b);
+            } else if (state.formatSpecifier == '<') {
+                elementDetail(format, *b);
+            } else {
+                printfDetail(format, *b);
+            }
+
+            ++b;
+
+            child = format.getNextSibling(child);
+
+            if (child == nullptr || child->state.formatSpecifier != ']') {
+                format.error(child, "Invalid collection format (expected %])");
+            } else if (b != e || !(nextNode->state.type & alternative)) {
+                auto& state = child->state;
+
+                if (state.prefixSize != 0) {
+                    dest.append(state.prefix, state.prefixSize);
+                }
+            }
+
+            format.indexStack.back()++;
+        }
+    } else {
+#if __cplusplus >= 201703L
+        using std::size;
+#endif
+        size_t index = state.width - 1;
+        size_t count = size(value);
+
+        format.indexStack.back() = index;
+
+        if (count == 0) {
+            format.error("value is empty, no indexing possible");
+        } else if (index >= count) {
+            format.error("Invalid index ", index, " maximum = ", count);
+        } else {
+            auto child = format.getChild(nextNode);
+
+            if (child == 0 || child->state.formatSpecifier == ']') {
+                format.error(child, "Missing format");
+            } else {
+                format.nextNode = child;
+                auto& state = child->state;
+
+                if (state.prefixSize != 0) {
+                    dest.append(state.prefix, state.prefixSize);
+                }
+
+                auto it = begin(value);
+
+                std::advance(it, index);
+
+                if (state.formatSpecifier == '[') {
+                    collectionDetail(format, *it);
+                } else if (state.formatSpecifier == '<') {
+                    elementDetail(format, *it);
+                } else {
+                    printfDetail(format, *it);
+                }
+
+                child = format.getNextSibling(child);
+
+                if (child == nullptr || child->state.formatSpecifier != ']') {
+                    format.error(child, "Invalid collection format (expected %])");
+                } else {
+                    auto& state = child->state;
+
+                    if (state.prefixSize != 0) {
+                        dest.append(state.prefix, state.prefixSize);
+                    }
+                }
+            }
+        }
     }
 
     format.indexStack.pop_back();
@@ -688,18 +758,23 @@ loopDetail(Format& format, const T& value)
 
 template<std::size_t I = 0, typename... Tp>
 typename std::enable_if<I == sizeof...(Tp), void>::type
-tupleLoopDetail(Format& format, const std::tuple<Tp...>& value)
+tupleCollectionDetail(Format& format, const std::tuple<Tp...>& value)
 {
 }
 
 template<std::size_t I = 0, typename... Tp>
 typename std::enable_if<I < sizeof...(Tp), void>::type
-tupleLoopDetail(Format& format, const std::tuple<Tp...>& value)
+tupleCollectionDetail(Format& format, const std::tuple<Tp...>& value)
 {
     auto nextNode = format.nextNode;
     auto& dest = format.dest;
 
     auto child = format.getChild(nextNode);
+
+    if (child == nullptr) {
+        format.error(child, "Missing format");
+        return;
+    }
 
     format.nextNode = child;
     auto& state = child->state;
@@ -709,9 +784,9 @@ tupleLoopDetail(Format& format, const std::tuple<Tp...>& value)
     }
 
     if (state.formatSpecifier == '[') {
-        loopDetail(format, std::get<I>(value));
+        collectionDetail(format, std::get<I>(value));
     } else if (state.formatSpecifier == '<') {
-        sequenceDetail(format, std::get<I>(value));
+        elementDetail(format, std::get<I>(value));
     } else {
         printfDetail(format, std::get<I>(value));
     }
@@ -719,7 +794,7 @@ tupleLoopDetail(Format& format, const std::tuple<Tp...>& value)
     child = format.getNextSibling(child);
 
     if (child == nullptr || child->state.formatSpecifier != ']') {
-        format.error(child, "Invalid loop format(expected %]");
+        format.error(child, "Invalid collection format(expected %]");
     } else if (I != sizeof...(Tp) - 1 || !(nextNode->state.type & alternative)) {
         auto& state = child->state;
 
@@ -730,41 +805,112 @@ tupleLoopDetail(Format& format, const std::tuple<Tp...>& value)
 
     format.nextNode = nextNode;
     format.indexStack.back()++;
-    tupleLoopDetail<I + 1, Tp...>(format, value);
-}
-
-template <typename... Ts>
-void loopDetail(Format& format, const std::tuple<Ts...>& value)
-{
-    format.indexStack.push_back(0);
-    tupleLoopDetail(format, value);
-    format.indexStack.pop_back();
-}
-
-template <typename T1, typename T2>
-void loopDetail(Format& format, const std::pair<T1, T2>& value)
-{
-    format.indexStack.push_back(0);
-    tupleLoopDetail(format, std::tuple<T1, T2>(value));
-    format.indexStack.pop_back();
+    tupleCollectionDetail<I + 1, Tp...>(format, value);
 }
 
 template<std::size_t I = 0, typename... Tp>
 typename std::enable_if<I == sizeof...(Tp), void>::type
-tupleSequenceDetail(Format& format, const std::tuple<Tp...>& value)
+tupleCollectionDetail(size_t index, Format& format, const std::tuple<Tp...>& value)
+{
+}
+
+template<std::size_t I = 0, typename... Tp>
+typename std::enable_if<I < sizeof...(Tp), void>::type
+tupleCollectionDetail(size_t index, Format& format, const std::tuple<Tp...>& value)
+{
+    if (index == I) {
+        auto nextNode = format.nextNode;
+        auto& dest = format.dest;
+        auto child = format.getChild(nextNode);
+
+        if (child == nullptr) {
+            format.error(child, "Missing format");
+            return;
+        }
+
+        format.nextNode = child;
+        auto& state = child->state;
+
+        if (state.prefixSize != 0) {
+            dest.append(state.prefix, state.prefixSize);
+        }
+
+        if (state.formatSpecifier == '[') {
+            collectionDetail(format, std::get<I>(value));
+        } else if (state.formatSpecifier == '<') {
+            elementDetail(format, std::get<I>(value));
+        } else {
+            printfDetail(format, std::get<I>(value));
+        }
+
+        child = format.getNextSibling(child);
+
+        if (child == nullptr || child->state.formatSpecifier != ']') {
+            format.error(child, "Invalid collection format(expected %]");
+        } else if (I != sizeof...(Tp) - 1 || !(nextNode->state.type & alternative)) {
+            auto& state = child->state;
+
+            if (state.prefixSize != 0) {
+                dest.append(state.prefix, state.prefixSize);
+            }
+        }
+
+        format.nextNode = nextNode;
+        return;
+    }
+
+    tupleCollectionDetail<I + 1, Tp...>(index, format, value);
+}
+
+template <typename... Ts>
+void collectionDetail(Format& format, const std::tuple<Ts...>& value)
+{
+    auto& state= format.nextNode->state;
+
+    format.indexStack.push_back(0);
+
+    if (!state.widthGiven()) {
+        tupleCollectionDetail(format, value);
+    } else {
+        size_t index = state.width - 1;
+        size_t count = sizeof...(Ts);
+
+        format.indexStack.back() = index;
+
+        if (count == 0) {
+            format.error("value is empty, no indexing possible");
+        } else if (index >= count) {
+            format.error("Invalid index ", index, " maximum = ", count);
+        } else {
+            tupleCollectionDetail(index, format, value);
+        }
+    }
+
+    format.indexStack.pop_back();
+}
+
+template <typename T1, typename T2>
+void collectionDetail(Format& format, const std::pair<T1, T2>& value)
+{
+    collectionDetail(format, std::tuple<T1, T2>(value));
+}
+
+template<std::size_t I = 0, typename... Tp>
+typename std::enable_if<I == sizeof...(Tp), void>::type
+tupleElementDetail(Format& format, const std::tuple<Tp...>& value)
 {
     format.error("Only ", I, " formats for tuple elements, ", sizeof...(Tp), " required");
 }
 
 template<std::size_t I = 0, typename... Tp>
 typename std::enable_if<I < sizeof...(Tp), void>::type
-tupleSequenceDetail(Format& format, const std::tuple<Tp...>& value)
+tupleElementDetail(Format& format, const std::tuple<Tp...>& value)
 {
     auto& dest = format.dest;
     auto nextNode = format.nextNode;
 
     if (nextNode == nullptr) {
-        format.error("missing argument in sequence format");
+        format.error("missing argument in element format");
         return;
     }
 
@@ -777,9 +923,9 @@ tupleSequenceDetail(Format& format, const std::tuple<Tp...>& value)
     if (state.formatSpecifier == '>') {
         format.error("Only ", I, " formats for tuple elements, ", sizeof...(Tp), " required");
     } else if (state.formatSpecifier == '[') {
-        loopDetail(format, std::get<I>(value));
+        collectionDetail(format, std::get<I>(value));
     } else if (state.formatSpecifier == '<') {
-        sequenceDetail(format, std::get<I>(value));
+        elementDetail(format, std::get<I>(value));
     } else {
         printfDetail(format, std::get<I>(value));
     }
@@ -788,19 +934,21 @@ tupleSequenceDetail(Format& format, const std::tuple<Tp...>& value)
 
     format.indexStack.back()++;
     if (I + 1 < sizeof...(Tp)) {
-        tupleSequenceDetail<I + 1, Tp...>(format, value);
+        tupleElementDetail<I + 1, Tp...>(format, value);
     }
 }
 
 template <typename... Ts>
-void sequenceDetail(Format& format, const std::tuple<Ts...>& value)
+void elementDetail(Format& format, const std::tuple<Ts...>& value)
 {
     auto nextNode = format.nextNode;
     format.indexStack.push_back(0);
 
     format.nextNode = format.getChild(nextNode);
 
-    if (nextNode->state.positionalChildren()) {
+    if (format.nextNode == nullptr) {
+        format.error(nextNode, "Missing format");
+    } else if (nextNode->state.positionalChildren()) {
         while (format.nextNode != nullptr) {
             auto nextNode = format.nextNode;
             auto& state = nextNode->state;
@@ -814,7 +962,7 @@ void sequenceDetail(Format& format, const std::tuple<Ts...>& value)
                     if (nextNode->next == nullptr) {
                         // nop
                     } else {
-                        format.error("Invalid sequence format (expected %>)");
+                        format.error("Invalid element format (expected %>)");
                     }
                 } else {
                     format.error("Positional arguments can not be mixed with sequential arguments");
@@ -827,11 +975,11 @@ void sequenceDetail(Format& format, const std::tuple<Ts...>& value)
             format.indexStack.back()++;
         }
     } else {
-        tupleSequenceDetail(format, value);
+        tupleElementDetail(format, value);
         auto child = format.getNextSibling(format.nextNode, true);
 
         if (child == nullptr || child->state.formatSpecifier != '>') {
-            format.error("Invalid sequence format (expected %>)");
+            format.error("Invalid element format (expected %>)");
         } else {
             auto& state = child->state;
 
@@ -846,34 +994,114 @@ void sequenceDetail(Format& format, const std::tuple<Ts...>& value)
 }
 
 template <typename T1, typename T2>
-void sequenceDetail(Format& format, const std::pair<T1, T2>& value)
+void elementDetail(Format& format, const std::pair<T1, T2>& value)
+{
+    elementDetail(format, std::tuple<T1, T2>(value));
+}
+
+template <typename T>
+typename std::enable_if<std::is_class<T>::value || std::is_array<T>::value>::type
+elementDetail(Format& format, const T& value)
 {
     auto nextNode = format.nextNode;
+    format.indexStack.push_back(0);
+
+    using std::begin;
+    using std::end;
 
     format.nextNode = format.getChild(nextNode);
-    format.indexStack.push_back(0);
-    tupleSequenceDetail(format, std::tuple<T1, T2>(value));
-    format.indexStack.pop_back();
 
-    auto child = format.getNextSibling(format.nextNode, true);
+    if (format.nextNode == nullptr) {
+        format.error(nextNode, "Missing format");
+    } else if (nextNode->state.positionalChildren()) {
+        while (format.nextNode != nullptr) {
+            auto nextNode = format.nextNode;
+            auto& state = nextNode->state;
 
-    if (child == nullptr || child->state.formatSpecifier != '>') {
-        format.error("Invalid sequence format (expected %>)");
+            if (state.prefixSize != 0) {
+                format.dest.append(state.prefix, state.prefixSize);
+            }
+
+            if (state.position == 0) {
+                if (state.formatSpecifier == '>') {
+                    if (nextNode->next == nullptr) {
+                        // nop
+                    } else {
+                        format.error("Invalid element format (expected %>)");
+                    }
+                } else {
+                    format.error("Positional arguments can not be mixed with sequential arguments");
+                }
+            } else {
+                auto it = begin(value);
+
+                std::advance(it, state.position - 1);
+
+                if (state.formatSpecifier == '[') {
+                    collectionDetail(format, *it);
+                } else if (state.formatSpecifier == '<') {
+                    elementDetail(format, *it);
+                } else {
+                    printfDetail(format, *it);
+                }
+            }
+
+            format.nextNode = format.getNextSibling(format.nextNode);
+            format.indexStack.back()++;
+        }
     } else {
-        auto& state = child->state;
+        for (const auto& v : value) {
+            auto nextNode = format.nextNode;
+            if (nextNode == nullptr) {
+                format.error("Invalid element format (expected %>)");
+                break;
+            }
 
-        if (state.prefixSize != 0) {
-            format.dest.append(state.prefix, state.prefixSize);
+            auto& state = nextNode->state;
+
+            if (state.prefixSize != 0) {
+                format.dest.append(state.prefix, state.prefixSize);
+            }
+
+            if (state.formatSpecifier == '>') {
+                format.error(nextNode, "Missing format");
+                break;
+            }
+
+            if (state.formatSpecifier == '[') {
+                collectionDetail(format, v);
+            } else if (state.formatSpecifier == '<') {
+                elementDetail(format, v);
+            } else {
+                printfDetail(format, v);
+            }
+
+            format.nextNode = format.getNextSibling(format.nextNode);
+            format.indexStack.back()++;
+        }
+
+        auto child = format.getNextSibling(format.nextNode, true);
+
+        if (child == nullptr || child->state.formatSpecifier != '>') {
+            format.error("Invalid element format (expected %>)");
+        } else {
+            auto& state = child->state;
+
+            if (state.prefixSize != 0) {
+                format.dest.append(state.prefix, state.prefixSize);
+            }
         }
     }
 
+    format.indexStack.pop_back();
     format.nextNode = nextNode;
 }
 
 template <typename T>
-void sequenceDetail(Format& format, const T& value)
+typename std::enable_if<!std::is_class<T>::value && !std::is_array<T>::value>::type
+elementDetail(Format& format, const T& value)
 {
-    format.error("Invalid argument for sequence format");
+    format.error("Invalid argument for element format");
 }
 
 template <typename T>
@@ -935,9 +1163,9 @@ void printfOne(Format& format, const T& value)
     }
 
     if (state.formatSpecifier == '[') {
-        loopDetail(format, value);
+        collectionDetail(format, value);
     } else if (state.formatSpecifier == '<') {
-        sequenceDetail(format, value);
+        elementDetail(format, value);
     } else {
         printfDetail(format, value);
     }
@@ -958,9 +1186,9 @@ void printfNth(Format& format, size_t index, const T& value, const Ts&... ts)
 
     if (index == 1) {
         if (state.formatSpecifier == '[') {
-            loopDetail(format, value);
+            collectionDetail(format, value);
         } else if (state.formatSpecifier == '<') {
-            sequenceDetail(format, value);
+            elementDetail(format, value);
         } else {
             printfDetail(format, value);
         }

@@ -27,6 +27,8 @@ static void test()
     dest = fstring("104: %[ %]", v);
     dest = fstring("105: %[ %2{%d%}", v);
     dest = fstring("106: %[ %d, %]", 66);
+    dest = fstring("107: %[", v);
+    dest = fstring("108: %]", v);
 
     // sequence formats
     dest = fstring("201: %< %d %}", t);
@@ -39,15 +41,21 @@ static void test()
     dest = fstring("208: %< %4{%5d%} %>", t);
     dest = fstring("209: %< %>", t);
     dest = fstring("210: %< %3$d, %4$d%>", t);
+    dest = fstring("211: %<", p);
+    dest = fstring("212: %>", p);
 
     // positional
     dest = fstring("301: %d %1$d", 1);
     dest = fstring("302: %2$d %1$d", 1);
+    dest = fstring("303: %1$", 1);              // Should give an error!
 
     // dynamic
     dest = fstring("401: %*d", 1);
     dest = fstring("402: %[%*d%]", v, 5);
 
+    // repeat
+    dest = fstring("501: %{");
+    dest = fstring("501: %}");
 //  std::cout << dest << std::endl;
 }
 

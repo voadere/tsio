@@ -775,7 +775,7 @@ void tsioImplementation::Format::handleSpecialNodes(FormatNode*& node)
         node = node->next;
     } else if (spec == 'N') {
         if (indexStack.empty()) {
-            error("%N format is only valid inside rpeatimg, loop and sequence formats");
+            error("%N format is only valid inside rpeatimg, collection and element formats");
         } else {
             auto index = indexStack.back();
 
@@ -795,7 +795,10 @@ void tsioImplementation::Format::handleSpecialNodes(FormatNode*& node)
     } else if (spec == '{') {
         auto child = node->child;
 
-        if (child->next == nullptr && child->state.formatSpecifier == '}') {
+        if (child == nullptr) {
+            error("Missing format");
+            node = nullptr;
+        } else if (child->next == nullptr && child->state.formatSpecifier == '}') {
             for (unsigned i = 0, c = state.width; i < c; ++i) {
                 dest.append(child->state.prefix, child->state.prefixSize);
             }
@@ -844,10 +847,13 @@ tsioImplementation::FormatNode* tsioImplementation::Format::getNextSibling(Forma
 tsioImplementation::FormatNode* tsioImplementation::Format::getChild(FormatNode* node)
 {
     auto child = node->child;
-    auto& state = child->state;
 
-    if (state.nonDynamicSpecial()) {
-        return getNextSibling(child, true);
+    if (child != nullptr) {
+        auto& state = child->state;
+
+        if (state.nonDynamicSpecial()) {
+            return getNextSibling(child, true);
+        }
     }
 
     return child;

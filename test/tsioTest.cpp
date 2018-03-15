@@ -424,6 +424,12 @@ static void testExtensions()
     text = fstring("%*4${!%}", 1, 22, 333, 2);
     expect("!!", text);
 
+    text = fstring("%2[ %d %]", v);
+    expect(" 200 ", text);
+
+    text = fstring("%1[ %#N: %d %]", v);
+    expect(" 0: 10 ", text);
+
     std::vector<int> v1 = {9, 8, 7, 6};
     double fa[] = {1.2, 2.3, 3.4, 4.55555};
 
@@ -479,6 +485,12 @@ static void testTuple()
 
     text = fstring("%<{ %2$6.2f, %1$5d, %3$5s and again %2$6.2f%> }", t);
     expect("{   2.30,     1,  four and again   2.30 }", text);
+
+    text = fstring("%2[ %s %]", t);
+    expect(" 2.3 ", text);
+
+    text = fstring("%3[ %#N: %s %]", t);
+    expect(" 2: four ", text);
 
     auto tv = std::make_tuple(1, std::vector<int>{1, 3, 5}, "four");
 
@@ -554,8 +566,14 @@ static void run()
 static void test()
 {
     std::string text;
+    std::vector<int> v = {10, 200, 3000};
 
+    text = fstring("%<%3d%5d%10d%>", v);
     std::cout << text << std::endl;
+
+    text = fstring("%<%2$5d %3$5d %1$5d%>", v);
+    std::cout << text << std::endl;
+
 }
 
 int main(int argc, char* argv[])
