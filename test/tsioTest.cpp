@@ -104,7 +104,7 @@ void test(const T& value,
             const char* format = fmt.c_str();
 
             int stdReturn = 0;
-            int tsioReturn = false;
+            int tsioReturn = 0;
 
             if (dyn1 != nullptr) {
                 if (dyn2 != nullptr) {
@@ -199,7 +199,7 @@ static void testPointer()
         for (auto spec2 : spec2s) {
 
             test("The test", "s", spec1, spec2);
-            test(t1, "diouxXs", spec1, spec2);
+            test(t1, "s", spec1, spec2);
         }
     }
 }
@@ -246,7 +246,7 @@ static void testPrintfN()
     expect(8, sSize);
 
     sprintf(text, "Hello ");
-    addsprintf(text, "World%n!", &sSize);
+    asprintf(text, "World%n!", &sSize);
     expect("Hello World!", text);
     expect(5, sSize);
 }
@@ -255,9 +255,29 @@ static void testString()
 {
     std::string text;
     std::string s = "abcde";
+    char a[] = { 'z', 'y', 'x', 'w', '1', '2', 0, 'a', 'b', 'c' };
+    std::array<char, 10> sa = { 'z', 'y', 'x', 'w', 'v', 'u', 0, 'a', 'b', 'c' };
 
-    sprintf(text, "%s", s);
-    expect("abcde", text);
+    sprintf(text, "as text: %s", s);
+    expect("as text: abcde", text);
+
+    sprintf(text, "as collection:%3x", s);
+    expect("as collection: 61 62 63 64 65", text);
+
+    sprintf(text, "as collection:%3c", s);
+    expect("as collection:  a  b  c  d  e", text);
+
+    sprintf(text, "as text a: %s", a);
+    expect("as text a: zyxw12", text);
+
+    sprintf(text, "as char a: %C", a);
+    expect("as char a: zyxw12.abc", text);
+
+    sprintf(text, "as text sa: %s", sa);
+    expect("as text sa: zyxwvu", text);
+
+    sprintf(text, "as char sa: %C", sa);
+    expect("as char sa: zyxwvu.abc", text);
 }
 
 static void testPositional()
@@ -430,6 +450,12 @@ static void testExtensions()
     text = fstring("%1[ %#N: %d %]", v);
     expect(" 0: 10 ", text);
 
+    text = fstring("%<%3d%5d%10d%>", v);
+    expect(" 10  200      3000", text);
+
+    text = fstring("%<%2$5d %3$5d %1$5d%>", v);
+    expect("  200  3000    10", text);
+
     std::vector<int> v1 = {9, 8, 7, 6};
     double fa[] = {1.2, 2.3, 3.4, 4.55555};
 
@@ -517,7 +543,7 @@ static void testCFormat()
     expect("With CFormat: 1234.\n", text);
 
     text = fstring(cf, 9876);
-    addsprintf(text, cf, 10);
+    asprintf(text, cf, 10);
     expect("With CFormat: 9876.\nWith CFormat: 10.\n", text);
 
 }
@@ -546,6 +572,28 @@ static void testIndex()
     expect("    0: 10    1: 200    2: 3000", text);
 }
 
+static void testS()
+{
+    std::string t1;
+    std::string t2;
+
+    t1 = fstring("%c", 'a');
+    t2 = fstring("%s", 'a');
+    expect(t1, t2);
+
+    t1 = fstring("%d", -1234);
+    t2 = fstring("%s", -1234);
+    expect(t1, t2);
+
+    t1 = fstring("%u", 1234u);
+    t2 = fstring("%s", 1234u);
+    expect(t1, t2);
+
+    t1 = fstring("%g", 123.45);
+    t2 = fstring("%s", 123.45);
+    expect(t1, t2);
+}
+
 static void run()
 {
     testIntegral();
@@ -560,18 +608,14 @@ static void run()
     testTuple();
     testCFormat();
     testIndex();
+    testS();
     testExtensions();
 }
 
 static void test()
 {
     std::string text;
-    std::vector<int> v = {10, 200, 3000};
 
-    text = fstring("%<%3d%5d%10d%>", v);
-    std::cout << text << std::endl;
-
-    text = fstring("%<%2$5d %3$5d %1$5d%>", v);
     std::cout << text << std::endl;
 
 }
@@ -590,7 +634,7 @@ int main(int argc, char* argv[])
         run();
     }
 
-    oprintf("    %d sprintf tests executed in %4.2f seconds\n",
+    oprintf("    %d sprintf tests executed in %5.3f seconds\n",
             count,
             double(clock() / double(CLOCKS_PER_SEC)));
 }

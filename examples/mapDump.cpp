@@ -21,9 +21,9 @@ std::map<int, std::vector<std::string>> m = {
  * The dump function uses the simplest format thinkable to dump the content
  * of a map.
  *
- * It uses the fact that, when a container (map, vector, tuple etc...)
+ * It uses the fact that, when a collection (map, vector, tuple etc...)
  * is given as a parmeter to a simple format, this format will be used
- * recursively for all elements of the container.
+ * recursively for all elements of the collection.
  */
 
 static void dump()
@@ -42,7 +42,7 @@ static void print()
 }
 
 /*
- * The show function uses a sequence format to allow different formats for
+ * The show function uses a element format to allow different formats for
  * the key and for the value of each element
  */
 
@@ -65,13 +65,13 @@ static void  overview()
 {
     oprintf("{\n"               // starting brace
             "%[   "             // start loop format for map
-              "%<"              // start sequence format for map element
+              "%<"              // start element format for map element
               "{ "              // generate open brace
                 "%2d: "         // format for element key
                 "%#["           // start loop format for element value
                   "%-s, "       // format for element of element and , separator
                 "%] }"          // end loop format for element value
-              "%>\n"            // end sequence format for map element
+              "%>\n"            // end element format for map element
             "%]}\n",            // end loop format for map
             m);                 
 }

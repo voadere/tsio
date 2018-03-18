@@ -1,4 +1,5 @@
 #include "tsio.h"
+#include <cassert>
 
 using namespace tsio;
 
@@ -12,50 +13,55 @@ static void test()
     auto p = std::make_pair(1, "one");
 
     // general
-    dest = fstring("  1: %<%s%>", 1);
-    dest = fstring("  2: %n.", &d);
-    dest = fstring("  3: %*d.", d, i);
-    dest = fstring("  4: %d %d", 1, 2, 3);
-    dest = fstring("  5: %d %d", 1);
-    dest = fstring("  6: %5d:", d);
-    dest = fstring("  7: %5f:", i);
+    assert(sprintf(dest,"  1: %<%s%>", 1) < 0);
+    assert(sprintf(dest,"  2: %n.", &d) < 0);
+    assert(sprintf(dest,"  3: %n.", i) < 0);
+    assert(sprintf(dest,"  4: %*d.", d, i) < 0);
+    assert(sprintf(dest,"  5: %*d.", &i, i) < 0);
+    assert(sprintf(dest,"  6: %d %d", 1, 2, 3) < 0);
+    assert(sprintf(dest,"  7: %d %d", 1) < 0);
+    assert(sprintf(dest,"  8: %5d:", d) < 0);
+    assert(sprintf(dest,"  9: %5f:", i) < 0);
 
     // loop formats
-    dest = fstring("101: %[ %d %}", v);
-    dest = fstring("102: %[ %d", v);
-    dest = fstring("103: %[ %d %d %]", v);
-    dest = fstring("104: %[ %]", v);
-    dest = fstring("105: %[ %2{%d%}", v);
-    dest = fstring("106: %[ %d, %]", 66);
-    dest = fstring("107: %[", v);
-    dest = fstring("108: %]", v);
+    assert(sprintf(dest,"101: %[ %d %}", v) < 0);
+    assert(sprintf(dest,"102: %[ %d", v) < 0);
+    assert(sprintf(dest,"103: %[ %d %d %]", v) < 0);
+    assert(sprintf(dest,"104: %[ %]", v) < 0);
+    assert(sprintf(dest,"105: %[ %2{%d%}", v) < 0);
+    assert(sprintf(dest,"106: %[ %d, %]", 66) < 0);
+    assert(sprintf(dest,"107: %[", v) < 0);
+    assert(sprintf(dest,"108: %]", v) < 0);
 
     // sequence formats
-    dest = fstring("201: %< %d %}", t);
-    dest = fstring("202: %< %d", t);
-    dest = fstring("203: %< %d %}", p);
-    dest = fstring("204: %< %d", p);
-    dest = fstring("205: %< %5d%5d %>", t);
-    dest = fstring("206: %< %5d%5d%5d%5d %>", t);
-    dest = fstring("207: %< %2{%5d%} %>", t);
-    dest = fstring("208: %< %4{%5d%} %>", t);
-    dest = fstring("209: %< %>", t);
-    dest = fstring("210: %< %3$d, %4$d%>", t);
-    dest = fstring("211: %<", p);
-    dest = fstring("212: %>", p);
+    assert(sprintf(dest,"201: %< %d %}", t) < 0);
+    assert(sprintf(dest,"202: %< %d", t) < 0);
+    assert(sprintf(dest,"203: %< %d %}", p) < 0);
+    assert(sprintf(dest,"204: %< %d", p) < 0);
+    assert(sprintf(dest,"205: %< %5d%5d %>", t) < 0);
+    assert(sprintf(dest,"206: %< %5d%5d%5d%5d %>", t) < 0);
+    assert(sprintf(dest,"207: %< %2{%5d%} %>", t) < 0);
+    assert(sprintf(dest,"208: %< %4{%5d%} %>", t) < 0);
+    assert(sprintf(dest,"209: %< %>", t) < 0);
+    assert(sprintf(dest,"210: %< %3$d, %4$d%>", t) < 0);
+    assert(sprintf(dest,"211: %<", p) < 0);
+    assert(sprintf(dest,"212: %>", p) < 0);
 
     // positional
-    dest = fstring("301: %d %1$d", 1);
-    dest = fstring("302: %2$d %1$d", 1);
-    dest = fstring("303: %1$", 1);              // Should give an error!
+    assert(sprintf(dest,"301: %d %1$d", 1, 2) < 0);
+    assert(sprintf(dest,"302: %1$d %d", 1, 2) < 0);
+    assert(sprintf(dest,"303: %2$d %1$d", 1) < 0);
+    assert(sprintf(dest,"304: %1$", 1) < 0);
+    assert(sprintf(dest,"305: %2$*.*d", 1, 2, 3) < 0);
+    assert(sprintf(dest,"306: %2$*1$.*d", 1, 2, 3) < 0);
 
     // dynamic
-    dest = fstring("401: %*d", 1);
-    dest = fstring("402: %[%*d%]", v, 5);
+    assert(sprintf(dest,"401: %*d", 1) < 0);
+    assert(sprintf(dest,"402: %[%*d%]", v, 5) < 0);
 
     // repeat
-    dest = fstring("501: %{");
-    dest = fstring("501: %}");
+    assert(sprintf(dest,"501: %{") < 0);
+    assert(sprintf(dest,"502: %}") < 0);
 //  std::cout << dest << std::endl;
 }
 

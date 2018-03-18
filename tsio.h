@@ -61,10 +61,10 @@ enum TypeEnum {
     precisionDynamic = widthDynamic << 1,
     widthGiven = precisionDynamic << 1,
     precisionGiven = widthGiven << 1,
-    positionalChildren = precisionGiven << 1,
+    positional = precisionGiven << 1,
+    positionalChildren = positional << 1,
     upcase = positionalChildren << 1,
-    nice = upcase << 1,
-    special = nice << 1
+    special = upcase << 1
 };
 
 inline TSIO_ALWAYS_INLINE char* copy(char* dest, const char* src, unsigned count)
@@ -130,13 +130,11 @@ class Buffer
 
         void widen(size_t count)
         {
-            if (count > 0) {
-                if (mEod + count > mLen) {
-                    resize(mEod + count);
-                }
-
-                mEod += count;
+            if (mEod + count > mLen) {
+                resize(mEod + count);
             }
+
+            mEod += count;
         }
 
         void append(const char* value, size_t count)
@@ -206,6 +204,11 @@ struct FormatState
         return type & TypeEnum::widthDynamic;
     }
 
+    bool positional() const
+    {
+        return type & TypeEnum::positional;
+    }
+
     bool positionalChildren() const
     {
         return type & TypeEnum::positionalChildren;
@@ -265,6 +268,15 @@ struct FormatState
             type |= TypeEnum::precisionDynamic | TypeEnum::precisionGiven;
         } else {
             type &= ~TypeEnum::precisionDynamic;
+        }
+    }
+
+    void setPositional(bool v = true)
+    {
+        if (v) {
+            type |= TypeEnum::positional;
+        } else {
+            type &= ~TypeEnum::positional;
         }
     }
 
@@ -369,7 +381,7 @@ struct Format
     }
 
     FormatNode* getNode();
-    FormatNode* buildTree();
+    FormatNode* buildTree(unsigned depth = 0);
     static void printTree(std::ostream& os, FormatNode* node, unsigned indent);
     void dump();
 
@@ -489,6 +501,7 @@ void printfDetail(Format& format, double value);
 void printfDetail(Format& format, long double value);
 void printfDetail(Format& format, float value);
 void printfDetail(Format& format, bool value);
+void printfDetail(Format& format, char value);
 void printfDetail(Format& format, long long sValue, unsigned long long uValue,
         bool isSigned);
 
@@ -500,6 +513,44 @@ printfDetail(Format& format, const T& value)
     typename std::make_unsigned<T>::type uValue = value;
 
     printfDetail(format, sValue, uValue, std::is_signed<T>::value);
+}
+
+template<size_t N>
+void printfDetail(Format& format, const char (&value)[N])
+{
+    auto& state = format.nextNode->state;
+    char spec = state.formatSpecifier;
+
+    switch (spec) {
+        case 's':
+        case 'S':
+            printfDetail(format, static_cast<const char*>(value));
+            break;
+
+        default:
+            for (char v : value) {
+                printfDetail(format, v);
+            }
+    }
+}
+
+template<size_t N>
+void printfDetail(Format& format, const std::array<char, N>& value)
+{
+    auto& state = format.nextNode->state;
+    char spec = state.formatSpecifier;
+
+    switch (spec) {
+        case 's':
+        case 'S':
+            printfDetail(format, value.data());
+            break;
+
+        default:
+            for (char v : value) {
+                printfDetail(format, v);
+            }
+    }
 }
 
 template <typename T>
@@ -527,7 +578,7 @@ void printfDetail(Format& format, T* value)
             break;
 
         default:
-            printfDetail(format, static_cast<uintptr_t>(pValue));
+            format.error("Invalid format for pointer");
     }
 }
 
@@ -545,7 +596,7 @@ void printfDetail(Format& format, const T* value)
             break;
 
         default:
-            printfDetail(format, static_cast<uintptr_t>(pValue));
+            format.error("Invalid format for pointer");
     }
 }
 
@@ -671,9 +722,7 @@ collectionDetail(Format& format, const T& value)
             format.nextNode = child;
             auto& state = child->state;
 
-            if (state.prefixSize != 0) {
-                dest.append(state.prefix, state.prefixSize);
-            }
+            dest.append(state.prefix, state.prefixSize);
 
             if (state.formatSpecifier == '[') {
                 collectionDetail(format, *b);
@@ -692,9 +741,7 @@ collectionDetail(Format& format, const T& value)
             } else if (b != e || !(nextNode->state.type & alternative)) {
                 auto& state = child->state;
 
-                if (state.prefixSize != 0) {
-                    dest.append(state.prefix, state.prefixSize);
-                }
+                dest.append(state.prefix, state.prefixSize);
             }
 
             format.indexStack.back()++;
@@ -721,9 +768,7 @@ collectionDetail(Format& format, const T& value)
                 format.nextNode = child;
                 auto& state = child->state;
 
-                if (state.prefixSize != 0) {
-                    dest.append(state.prefix, state.prefixSize);
-                }
+                dest.append(state.prefix, state.prefixSize);
 
                 auto it = begin(value);
 
@@ -744,9 +789,7 @@ collectionDetail(Format& format, const T& value)
                 } else {
                     auto& state = child->state;
 
-                    if (state.prefixSize != 0) {
-                        dest.append(state.prefix, state.prefixSize);
-                    }
+                    dest.append(state.prefix, state.prefixSize);
                 }
             }
         }
@@ -779,9 +822,7 @@ tupleCollectionDetail(Format& format, const std::tuple<Tp...>& value)
     format.nextNode = child;
     auto& state = child->state;
 
-    if (state.prefixSize != 0) {
-        dest.append(state.prefix, state.prefixSize);
-    }
+    dest.append(state.prefix, state.prefixSize);
 
     if (state.formatSpecifier == '[') {
         collectionDetail(format, std::get<I>(value));
@@ -798,9 +839,7 @@ tupleCollectionDetail(Format& format, const std::tuple<Tp...>& value)
     } else if (I != sizeof...(Tp) - 1 || !(nextNode->state.type & alternative)) {
         auto& state = child->state;
 
-        if (state.prefixSize != 0) {
-            dest.append(state.prefix, state.prefixSize);
-        }
+        dest.append(state.prefix, state.prefixSize);
     }
 
     format.nextNode = nextNode;
@@ -831,9 +870,7 @@ tupleCollectionDetail(size_t index, Format& format, const std::tuple<Tp...>& val
         format.nextNode = child;
         auto& state = child->state;
 
-        if (state.prefixSize != 0) {
-            dest.append(state.prefix, state.prefixSize);
-        }
+        dest.append(state.prefix, state.prefixSize);
 
         if (state.formatSpecifier == '[') {
             collectionDetail(format, std::get<I>(value));
@@ -850,9 +887,7 @@ tupleCollectionDetail(size_t index, Format& format, const std::tuple<Tp...>& val
         } else if (I != sizeof...(Tp) - 1 || !(nextNode->state.type & alternative)) {
             auto& state = child->state;
 
-            if (state.prefixSize != 0) {
-                dest.append(state.prefix, state.prefixSize);
-            }
+            dest.append(state.prefix, state.prefixSize);
         }
 
         format.nextNode = nextNode;
@@ -916,9 +951,7 @@ tupleElementDetail(Format& format, const std::tuple<Tp...>& value)
 
     auto& state = nextNode->state;
 
-    if (state.prefixSize != 0) {
-        dest.append(state.prefix, state.prefixSize);
-    }
+    dest.append(state.prefix, state.prefixSize);
 
     if (state.formatSpecifier == '>') {
         format.error("Only ", I, " formats for tuple elements, ", sizeof...(Tp), " required");
@@ -953,9 +986,7 @@ void elementDetail(Format& format, const std::tuple<Ts...>& value)
             auto nextNode = format.nextNode;
             auto& state = nextNode->state;
 
-            if (state.prefixSize != 0) {
-                format.dest.append(state.prefix, state.prefixSize);
-            }
+            format.dest.append(state.prefix, state.prefixSize);
 
             if (state.position == 0) {
                 if (state.formatSpecifier == '>') {
@@ -983,9 +1014,7 @@ void elementDetail(Format& format, const std::tuple<Ts...>& value)
         } else {
             auto& state = child->state;
 
-            if (state.prefixSize != 0) {
-                format.dest.append(state.prefix, state.prefixSize);
-            }
+            format.dest.append(state.prefix, state.prefixSize);
         }
     }
 
@@ -1018,9 +1047,7 @@ elementDetail(Format& format, const T& value)
             auto nextNode = format.nextNode;
             auto& state = nextNode->state;
 
-            if (state.prefixSize != 0) {
-                format.dest.append(state.prefix, state.prefixSize);
-            }
+            format.dest.append(state.prefix, state.prefixSize);
 
             if (state.position == 0) {
                 if (state.formatSpecifier == '>') {
@@ -1059,9 +1086,7 @@ elementDetail(Format& format, const T& value)
 
             auto& state = nextNode->state;
 
-            if (state.prefixSize != 0) {
-                format.dest.append(state.prefix, state.prefixSize);
-            }
+            format.dest.append(state.prefix, state.prefixSize);
 
             if (state.formatSpecifier == '>') {
                 format.error(nextNode, "Missing format");
@@ -1087,9 +1112,7 @@ elementDetail(Format& format, const T& value)
         } else {
             auto& state = child->state;
 
-            if (state.prefixSize != 0) {
-                format.dest.append(state.prefix, state.prefixSize);
-            }
+            format.dest.append(state.prefix, state.prefixSize);
         }
     }
 
@@ -1107,15 +1130,14 @@ elementDetail(Format& format, const T& value)
 template <typename T>
 void printfOne(Format& format, const T& value)
 {
-    if (format.nextNode == nullptr && format.repeatStack.empty()) {
-        format.error("Extraneous parameter or missing format specifier");
+    if (format.nextNode == nullptr) {
+        format.error("Extraneous argument or missing format specifier");
         return;
     }
 
     auto& state = format.nextNode->state;
 
-    if (state.position != 0 || state.widthPosition != 0 ||
-            state.precisionPosition != 0) {
+    if (state.positional()) {
         format.error("Positional arguments can not be mixed with sequential arguments");
         return;
     }
@@ -1158,9 +1180,7 @@ void printfOne(Format& format, const T& value)
         }
     }
 
-    if (state.prefixSize != 0) {
-        format.dest.append(state.prefix, state.prefixSize);
-    }
+    format.dest.append(state.prefix, state.prefixSize);
 
     if (state.formatSpecifier == '[') {
         collectionDetail(format, value);
@@ -1168,6 +1188,72 @@ void printfOne(Format& format, const T& value)
         elementDetail(format, value);
     } else {
         printfDetail(format, value);
+    }
+
+    format.getNextNode();
+}
+
+template <size_t N>
+void printfOne(Format& format, const char (&value)[N])
+{
+    if (format.nextNode == nullptr) {
+        format.error("Extraneous argument or missing format specifier");
+        return;
+    }
+
+    auto& state = format.nextNode->state;
+
+    if (state.positional()) {
+        format.error("Positional arguments can not be mixed with sequential arguments");
+        return;
+    }
+
+    if (state.dynamic()) {
+        if (state.widthDynamic()) {
+            int spec = toSpec(format, value);
+
+            if (spec < 0) {
+                state.width = -spec;
+                state.type |= leftJustify;
+                if (state.type & numericfill) {
+                    state.type &= ~numericfill;
+                    state.fillCharacter = ' ';
+                }
+            } else {
+                state.width = spec;
+            }
+
+            state.setWidthDynamic(false);
+            if (!state.dynamic()) {
+                format.getNextNode(true);
+            }
+
+            return;
+        }
+
+        if (state.precisionDynamic()) {
+            int spec = toSpec(format, value);
+
+            if (spec < 0) {
+                state.setPrecisionGiven(false);
+            } else {
+                state.precision = spec;
+            }
+
+            state.setPrecisionDynamic(false);
+            format.getNextNode(true);
+            return;
+        }
+    }
+
+    format.dest.append(state.prefix, state.prefixSize);
+
+    if (state.formatSpecifier == '[') {
+        collectionDetail(format, value);
+    } else if (state.formatSpecifier == '<') {
+        elementDetail(format, value);
+    } else {
+        printfDetail<N>(format, value);
     }
 
     format.getNextNode();
@@ -1272,6 +1358,10 @@ void printfPositionalOne(Format& format, const Ts&... ts)
 
     if (state.dynamic()) {
         if (state.widthDynamic()) {
+            if (state.widthPosition == 0) {
+                format.error("Width must be read from a positional argument");
+            }
+
             int spec = 0;
 
             readSpecNum(format, spec, state.widthPosition, ts...);
@@ -1296,6 +1386,10 @@ void printfPositionalOne(Format& format, const Ts&... ts)
         }
 
         if (state.precisionDynamic()) {
+            if (state.precisionPosition == 0) {
+                format.error("Precision must be read from a positional argument");
+            }
+
             int spec = 0;
 
             readSpecNum(format, spec, state.precisionPosition, ts...);
@@ -1308,6 +1402,7 @@ void printfPositionalOne(Format& format, const Ts&... ts)
 
             state.setPrecisionDynamic(false);
             format.getNextNode(true);
+
             return;
         }
     }
@@ -1363,7 +1458,7 @@ int addSprintf(Format& format, const Ts&... ts)
 
             if (format.nextNode != nullptr) {
                 if (format.nextNode->state.formatSpecifier != 0) {
-                    format.error("Extraneous format or missing parameter");
+                    format.error("Extraneous format or missing argument");
                 }
             }
         }
@@ -1445,7 +1540,7 @@ int sprintf(std::string& dest, const char* format, const Arguments&... arguments
 }
 
 template <typename... Arguments>
-int addsprintf(std::string& dest, const char* format, const Arguments&... arguments)
+int asprintf(std::string& dest, const char* format, const Arguments&... arguments)
 {
     return tsioImplementation::addSprintf(dest, format, arguments...);
 }
@@ -1510,7 +1605,7 @@ int sprintf(std::string& dest, CFormat& format, const Arguments&... arguments)
 }
 
 template <typename... Arguments>
-int addsprintf(std::string& dest, CFormat& format, const Arguments&... arguments)
+int asprintf(std::string& dest, CFormat& format, const Arguments&... arguments)
 {
     format.reset();
     return tsioImplementation::addSprintf(dest, format, arguments...);
