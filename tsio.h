@@ -37,6 +37,7 @@
 #include <limits>
 #include <malloc.h>
 #include <string>
+#include <tuple>
 #include <vector>
 
 #if defined(_MSC_VER)
@@ -478,6 +479,7 @@ struct Format
     void handleSpecialNodes(FormatNode*& node);
     void getNextNode(bool first = false);
     FormatNode* getNextSibling(FormatNode* node, bool first = false);
+    char getNextSiblingSpec(FormatNode* node);
     FormatNode* getChild(FormatNode* node);
     void tabTo(unsigned column, bool absolute);
 
@@ -513,25 +515,6 @@ printfDetail(Format& format, const T& value)
     typename std::make_unsigned<T>::type uValue = value;
 
     printfDetail(format, sValue, uValue, std::is_signed<T>::value);
-}
-
-template<size_t N>
-void printfDetail(Format& format, const char (&value)[N])
-{
-    auto& state = format.nextNode->state;
-    char spec = state.formatSpecifier;
-
-    switch (spec) {
-        case 's':
-        case 'S':
-            printfDetail(format, static_cast<const char*>(value));
-            break;
-
-        default:
-            for (char v : value) {
-                printfDetail(format, v);
-            }
-    }
 }
 
 template<size_t N>
@@ -601,7 +584,7 @@ void printfDetail(Format& format, const T* value)
 }
 
 template <typename T>
-typename std::enable_if<std::is_class<T>::value>::type
+typename std::enable_if<std::is_class<T>::value || std::is_array<T>::value>::type
 printfDetail(Format& format, const T& value)
 {
     for (const auto& v : value) {
@@ -734,11 +717,12 @@ collectionDetail(Format& format, const T& value)
 
             ++b;
 
-            child = format.getNextSibling(child);
+            auto spec = format.getNextSiblingSpec(child);
 
-            if (child == nullptr || child->state.formatSpecifier != ']') {
+            if (spec != ']') {
                 format.error(child, "Invalid collection format (expected %])");
             } else if (b != e || !(nextNode->state.type & alternative)) {
+                child = format.getNextSibling(child);
                 auto& state = child->state;
 
                 dest.append(state.prefix, state.prefixSize);
@@ -832,11 +816,12 @@ tupleCollectionDetail(Format& format, const std::tuple<Tp...>& value)
         printfDetail(format, std::get<I>(value));
     }
 
-    child = format.getNextSibling(child);
+    auto spec = format.getNextSiblingSpec(child);
 
-    if (child == nullptr || child->state.formatSpecifier != ']') {
+    if (spec != ']') {
         format.error(child, "Invalid collection format(expected %]");
     } else if (I != sizeof...(Tp) - 1 || !(nextNode->state.type & alternative)) {
+        child = format.getNextSibling(child);
         auto& state = child->state;
 
         dest.append(state.prefix, state.prefixSize);
@@ -880,11 +865,12 @@ tupleCollectionDetail(size_t index, Format& format, const std::tuple<Tp...>& val
             printfDetail(format, std::get<I>(value));
         }
 
-        child = format.getNextSibling(child);
+        auto spec = format.getNextSiblingSpec(child);
 
-        if (child == nullptr || child->state.formatSpecifier != ']') {
+        if (spec != ']') {
             format.error(child, "Invalid collection format(expected %]");
         } else if (I != sizeof...(Tp) - 1 || !(nextNode->state.type & alternative)) {
+            child = format.getNextSibling(child);
             auto& state = child->state;
 
             dest.append(state.prefix, state.prefixSize);
@@ -1193,71 +1179,6 @@ void printfOne(Format& format, const T& value)
     format.getNextNode();
 }
 
-template <size_t N>
-void printfOne(Format& format, const char (&value)[N])
-{
-    if (format.nextNode == nullptr) {
-        format.error("Extraneous argument or missing format specifier");
-        return;
-    }
-
-    auto& state = format.nextNode->state;
-
-    if (state.positional()) {
-        format.error("Positional arguments can not be mixed with sequential arguments");
-        return;
-    }
-
-    if (state.dynamic()) {
-        if (state.widthDynamic()) {
-            int spec = toSpec(format, value);
-
-            if (spec < 0) {
-                state.width = -spec;
-                state.type |= leftJustify;
-                if (state.type & numericfill) {
-                    state.type &= ~numericfill;
-                    state.fillCharacter = ' ';
-                }
-            } else {
-                state.width = spec;
-            }
-
-            state.setWidthDynamic(false);
-            if (!state.dynamic()) {
-                format.getNextNode(true);
-            }
-
-            return;
-        }
-
-        if (state.precisionDynamic()) {
-            int spec = toSpec(format, value);
-
-            if (spec < 0) {
-                state.setPrecisionGiven(false);
-            } else {
-                state.precision = spec;
-            }
-
-            state.setPrecisionDynamic(false);
-            format.getNextNode(true);
-            return;
-        }
-    }
-
-    format.dest.append(state.prefix, state.prefixSize);
-
-    if (state.formatSpecifier == '[') {
-        collectionDetail(format, value);
-    } else if (state.formatSpecifier == '<') {
-        elementDetail(format, value);
-    } else {
-        printfDetail<N>(format, value);
-    }
-
-    format.getNextNode();
-}
 
 #if __cplusplus < 201703L
 inline void printfNth(Format& format, size_t)
@@ -1268,9 +1189,9 @@ inline void printfNth(Format& format, size_t)
 template <typename T, typename... Ts>
 void printfNth(Format& format, size_t index, const T& value, const Ts&... ts)
 {
-    auto& state = format.nextNode->state;
-
     if (index == 1) {
+        auto& state = format.nextNode->state;
+
         if (state.formatSpecifier == '[') {
             collectionDetail(format, value);
         } else if (state.formatSpecifier == '<') {
@@ -1304,7 +1225,15 @@ template <typename T, typename... Ts>
 bool printfDispatch(Format& format, size_t index, const T& value, const Ts&... ts)
 {
     if (index == 0) {
-        printfDetail(format, value);
+        auto& state = format.nextNode->state;
+
+        if (state.formatSpecifier == '[') {
+            collectionDetail(format, value);
+        } else if (state.formatSpecifier == '<') {
+            elementDetail(format, value);
+        } else {
+            printfDetail(format, value);
+        }
         return true;
     }
 

@@ -830,6 +830,21 @@ tsioImplementation::FormatNode* tsioImplementation::Format::getNextSibling(Forma
     return node;
 }
 
+char tsioImplementation::Format::getNextSiblingSpec(FormatNode* node)
+{
+    if (node == nullptr) {
+        return 0;
+    }
+
+    node = node->next;
+
+    while (node != nullptr && node->state.nonDynamicSpecial()) {
+        node = node->next;
+    }
+
+    return (node == nullptr) ? 0 : node->state.formatSpecifier;
+}
+
 tsioImplementation::FormatNode* tsioImplementation::Format::getChild(FormatNode* node)
 {
     auto child = node->child;

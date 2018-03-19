@@ -270,9 +270,6 @@ static void testString()
     sprintf(text, "as text a: %s", a);
     expect("as text a: zyxw12", text);
 
-    sprintf(text, "as char a: %C", a);
-    expect("as char a: zyxw12.abc", text);
-
     sprintf(text, "as text sa: %s", sa);
     expect("as text sa: zyxwvu", text);
 
@@ -331,8 +328,42 @@ static void testRepeatingFormats()
     expect("prefix ****  333 333 333 !!", text);
 }
 
+static void testNesting()
+{
+    int ia[] = { 1, 2, 3, 4, 5, 6 };
+    std::string text;
+
+    text = fstring("%[%d%]", ia);
+    expect("123456", text);
+
+    text = fstring("%#[%d, %]", ia);
+    expect("1, 2, 3, 4, 5, 6", text);
+
+    text = fstring("%[%d %2{*%}, %]", ia);
+    expect("1 **, 2 **, 3 **, 4 **, 5 **, 6 **, ", text);
+
+    text = fstring("%#[%d %2{*%}, %]", ia);
+    expect("1 **, 2 **, 3 **, 4 **, 5 **, 6", text);
+
+    std::tuple<int, int, int, int, int, int> t = { 1, 2, 3, 4, 5, 6 };
+
+    text = fstring("%[%d%]", t);
+    expect("123456", text);
+
+    text = fstring("%#[%d, %]", t);
+    expect("1, 2, 3, 4, 5, 6", text);
+
+    text = fstring("%[%d %2{*%}, %]", t);
+    expect("1 **, 2 **, 3 **, 4 **, 5 **, 6 **, ", text);
+
+    text = fstring("%#[%d %2{*%}, %]", t);
+    expect("1 **, 2 **, 3 **, 4 **, 5 **, 6", text);
+
+}
+
 static void testBinaryFormat() {
     std::string text = fstring("%b %#b %B %#B", 2, 1234, 99, 9876);
+
     expect("10 0b10011010010 1100011 0B10011010010100", text);
 }
 
@@ -610,6 +641,7 @@ static void run()
     testIndex();
     testS();
     testExtensions();
+    testNesting();
 }
 
 static void test()
