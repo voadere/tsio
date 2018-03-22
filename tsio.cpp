@@ -116,7 +116,7 @@ static void makeNice(tsioImplementation::Buffer& dest, const char* text, int siz
     }
 }
 
-static void outputString(tsioImplementation::Format& format, const char* text, int size, int maxSize)
+void outputString(tsioImplementation::Format& format, const char* text, int size, int maxSize)
 {
     using namespace tsioImplementation;
     auto& dest = format.dest;
@@ -678,7 +678,7 @@ tsioImplementation::FormatNode* tsioImplementation::Format::buildTree(unsigned d
 
         auto spec = state.formatSpecifier;
 
-        if (spec == '}' || spec == ']' || spec == '>') {
+        if (spec == '}' || spec == ']' || spec == '>' || spec == ')') {
             if (depth == 0) {
                 error(node, "non matching '%", spec, "'");
             }
@@ -689,6 +689,18 @@ tsioImplementation::FormatNode* tsioImplementation::Format::buildTree(unsigned d
         if (spec == '{' || spec == '[') {
             node->child = buildTree(depth + 1);
         } else if (spec == '<') {
+            bool parentPositional = positional;
+
+            positional = false;
+
+            node->child = buildTree(depth + 1);
+
+            if (positional) {
+                state.setPositionalChildren();
+            }
+
+            positional = parentPositional;
+        } else if (spec == '(') {
             bool parentPositional = positional;
 
             positional = false;

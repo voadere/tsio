@@ -330,8 +330,18 @@ static void testRepeatingFormats()
 
 static void testNesting()
 {
-    int ia[] = { 1, 2, 3, 4, 5, 6 };
     std::string text;
+
+    text = fstring("- %4{+ %3{ *%2{x%}* %} +%} -");
+    expect("- +  *xx*  *xx*  *xx*  ++  *xx*  *xx*  *xx*  ++  *xx*  *xx*  *xx*  ++  *xx*  *xx*  *xx*  + -", text);
+
+    text = fstring("- %4{+ %*{ *%2{x%}* %} +%} -", 3);
+    expect("- +  *xx*  *xx*  *xx*  ++  *xx*  *xx*  *xx*  ++  *xx*  *xx*  *xx*  ++  *xx*  *xx*  *xx*  + -", text);
+
+    text = fstring("- %4{+ %*2${ *%2{x%}* %} +%} -", 1, 3, 2);
+    expect("- +  *xx*  *xx*  *xx*  ++  *xx*  *xx*  *xx*  ++  *xx*  *xx*  *xx*  ++  *xx*  *xx*  *xx*  + -", text);
+
+    int ia[] = { 1, 2, 3, 4, 5, 6 };
 
     text = fstring("%[%d%]", ia);
     expect("123456", text);
@@ -625,6 +635,63 @@ static void testS()
     expect(t1, t2);
 }
 
+class Custom
+{
+};
+
+class CFormatter
+{
+    public:
+        CFormatter(const Custom& c)
+            : cRef(c)
+        {
+        }
+
+
+    template <typename T>
+        std::tuple<bool, std::string> format(SingleFormat fmt, const T& t)
+        {
+            int i = 0;
+            switch(fmt.getSpecifier()) {
+                case 'a':
+                    i = 1;
+                    break;
+
+                case 'b':
+                    i = 22;
+                    break;
+
+                case 'c':
+                    i = 333;
+                    break;
+
+            }
+
+            std::string result;
+            fmt.setSpecifier('d');
+            fmt.asprintf(result, i);
+
+            return { true, result };
+        }
+
+    private:
+        const Custom& cRef;
+};
+
+CFormatter getFormatter(const Custom& custom)
+{
+    return CFormatter(custom);
+}
+
+void testCustomized()
+{
+    std::string text;
+    Custom custom;
+
+    text = fstring("%(%5b%5a%5c%)", custom);
+    expect("", text);
+}
+
 static void run()
 {
     testIntegral();
@@ -642,6 +709,7 @@ static void run()
     testS();
     testExtensions();
     testNesting();
+    testCustomized();
 }
 
 static void test()

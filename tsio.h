@@ -38,6 +38,7 @@
 #include <malloc.h>
 #include <string>
 #include <tuple>
+#include <type_traits>
 #include <vector>
 
 #if defined(_MSC_VER)
@@ -67,6 +68,74 @@ enum TypeEnum {
     upcase = positionalChildren << 1,
     special = upcase << 1
 };
+
+using std::begin;
+using std::end;
+
+#if __cplusplus < 201703L
+
+template <typename T>
+size_t size(const T& t)
+{
+    return t.size();
+}
+
+template <typename T, size_t N>
+size_t size(const T(& t)[N])
+{
+    return N;
+}
+
+#else
+
+using std::size;
+
+#endif
+
+#if 0
+#if __cplusplus < 201703
+template <typename...> using void_t = void;
+#else
+template <typename... Ts> using void_t = std::void_t<Ts...>;
+#endif
+
+template <typename, typename = void_t<>>
+struct hasBegin : std::false_type {};
+
+template <typename T>
+struct hasBegin<T, void_t<decltype(getFormatter(std::declval<T>()))>> : std::true_type {};
+
+template <typename, typename = void_t<>>
+struct hasFormatter : std::false_type {};
+
+template <typename T>
+struct hasFormatter<T, void_t<decltype(getFormatter(std::declval<T>()))>> : std::true_type {};
+#else
+template<typename T>
+struct hasBegin {
+    private:
+        template<typename U> static auto            test(int) ->
+                decltype(begin(std::declval<U>()), std::true_type());
+        template<typename U> static std::false_type test(...);
+
+    public:
+        static constexpr bool value = std::is_same<decltype(test<T>(0)),
+                         std::true_type>::value;
+};
+
+template<typename T>
+struct hasFormatter {
+    private:
+        template<typename U> static auto            test(int) ->
+            decltype(getFormatter(std::declval<U>()), std::true_type());
+        template<typename U> static std::false_type test(...);
+
+    public:
+        static constexpr bool value = std::is_same<decltype(test<T>(0)),
+                         std::true_type>::value;
+};
+#endif
+
 
 inline TSIO_ALWAYS_INLINE char* copy(char* dest, const char* src, unsigned count)
 {
@@ -356,7 +425,125 @@ struct FormatNodes
     FormatNodes* next = nullptr;
     size_t index = 0;
 };
+};
 
+namespace tsio
+{
+class SingleFormat
+{
+    public:
+        SingleFormat(tsioImplementation::FormatNode* node)
+            : state(node->state)
+        {
+        }
+
+        bool getNumericFill() const
+        {
+            return state.type & tsioImplementation::numericfill;
+        }
+
+        bool getAlfaFill() const
+        {
+            return state.type & tsioImplementation::alfafill;
+        }
+
+        bool getPlusIfPositive() const
+        {
+            return state.type & tsioImplementation::plusIfPositive;
+        }
+
+        bool getSpaceIfPositive() const
+        {
+            return state.type & tsioImplementation::spaceIfPositive;
+        }
+
+        bool getLeftJustify() const
+        {
+            return state.type & tsioImplementation::leftJustify;
+        }
+
+        bool widthGiven() const
+        {
+            return state.widthGiven();
+        }
+
+        bool getCenterJustify() const
+        {
+            return state.type & tsioImplementation::centerJustify;
+        }
+
+        bool getAlternative() const
+        {
+            return state.type & tsioImplementation::alternative;
+        }
+
+        bool precisionGiven() const
+        {
+            return state.precisionGiven();
+        }
+
+        unsigned getWidth() const
+        {
+            return state.width;
+        }
+
+        unsigned getPrecision() const
+        {
+            return state.precision;
+        }
+
+        char getSpecifier() const
+        {
+            return state.formatSpecifier;
+        }
+
+        char getFillCharacrer() const
+        {
+            return state.fillCharacter;
+        }
+
+        void setWidthGiven(bool v = true)
+        {
+            state.setWidthGiven(v);
+        }
+
+        void setPrecisionGiven(bool v = true)
+        {
+            state.setPrecisionGiven(v);
+        }
+
+        void setWidth(unsigned v)
+        {
+            state.width = v;
+            state.setWidthGiven(true);
+        }
+
+        void setPrecision(unsigned v)
+        {
+            state.precision = v;
+            state.setPrecisionGiven(true);
+        }
+
+        void setSpecifier(char v)
+        {
+            state.formatSpecifier = v;
+        }
+
+        void setFillCharacter(char v)
+        {
+            state.fillCharacter = v;
+        }
+
+        template <typename T>
+        void asprintf(std::string& dest, const T& t);
+
+    private:
+        tsioImplementation::FormatState state;
+};
+};
+
+namespace tsioImplementation
+{
 struct Format
 {
     Format() = default;
@@ -584,12 +771,81 @@ void printfDetail(Format& format, const T* value)
 }
 
 template <typename T>
-typename std::enable_if<std::is_class<T>::value || std::is_array<T>::value>::type
+typename std::enable_if<(hasBegin<T>::value || std::is_array<T>::value) &&
+    !hasFormatter<T>::value>::type
 printfDetail(Format& format, const T& value)
 {
     for (const auto& v : value) {
         printfDetail(format, v);
-    };
+    }
+}
+
+template <typename T>
+void customFormat(Format& format, const T& value)
+{
+    auto& dest = format.dest;
+    auto formatter = getFormatter(value);
+    auto child = format.getChild(format.nextNode);
+
+    if (child == 0 || child->state.formatSpecifier == ')') {
+        format.error(child, "Missing format");
+        return;
+    }
+
+    for (;;) {
+        std::string text;
+        bool ok;
+        auto& state = child->state;
+
+        dest.append(state.prefix, state.prefixSize);
+
+        if (state.formatSpecifier == ')') {
+            break;
+        }
+
+        std::tie(ok, text) = formatter.format(tsio::SingleFormat(child), value);
+        if (!ok) {
+            format.error(text);
+            break;
+        }
+
+        dest.append(text.c_str(), text.size());
+
+        auto spec = format.getNextSiblingSpec(child);
+
+        if (spec == 0) {
+            format.error(child, "Missing format");
+            return;
+        }
+
+        child = format.getNextSibling(child);
+    }
+}
+
+template <typename T>
+typename std::enable_if<(hasBegin<T>::value || std::is_array<T>::value) &&
+    hasFormatter<T>::value>::type
+printfDetail(Format& format, const T& value)
+{
+    if (format.nextNode->state.formatSpecifier == '(') {
+        customFormat(format, value);
+    } else {
+        for (const auto& v : value) {
+            printfDetail(format, v);
+        }
+    }
+}
+
+template <typename T>
+typename std::enable_if<!(hasBegin<T>::value || std::is_array<T>::value) &&
+    hasFormatter<T>::value>::type
+printfDetail(Format& format, const T& value)
+{
+    if (format.nextNode->state.formatSpecifier == '(') {
+        customFormat(format, value);
+    } else {
+        format.error("Invalid argument");
+    }
 }
 
 template <std::size_t I = 0, typename... Tp>
@@ -659,29 +915,15 @@ toSpec(Format& format, const T& value)
     return int(value);
 }
 
-#if __cplusplus < 201703L
 template <typename T>
-size_t size(const T& t)
-{
-    return t.size();
-}
-
-template <typename T, size_t N>
-size_t size(const T(& t)[N])
-{
-    return N;
-}
-#endif
-
-template <typename T>
-typename std::enable_if<!std::is_class<T>::value && !std::is_array<T>::value>::type
+typename std::enable_if<!hasBegin<T>::value && !std::is_array<T>::value>::type
 collectionDetail(Format& format, const T& value)
 {
     format.error("Invalid argument for collection format");
 }
 
 template <typename T>
-typename std::enable_if<std::is_class<T>::value || std::is_array<T>::value>::type
+typename std::enable_if<hasBegin<T>::value || std::is_array<T>::value>::type
 collectionDetail(Format& format, const T& value)
 {
     auto nextNode = format.nextNode;
@@ -689,9 +931,6 @@ collectionDetail(Format& format, const T& value)
     auto& state = format.nextNode->state;
 
     format.indexStack.push_back(0);
-
-    using std::begin;
-    using std::end;
 
     if (!state.widthGiven()) {
         for (auto b = begin(value), e = end(value); b != e;) {
@@ -731,9 +970,6 @@ collectionDetail(Format& format, const T& value)
             format.indexStack.back()++;
         }
     } else {
-#if __cplusplus >= 201703L
-        using std::size;
-#endif
         size_t index = state.width - 1;
         size_t count = size(value);
 
@@ -1015,14 +1251,11 @@ void elementDetail(Format& format, const std::pair<T1, T2>& value)
 }
 
 template <typename T>
-typename std::enable_if<std::is_class<T>::value || std::is_array<T>::value>::type
+typename std::enable_if<hasBegin<T>::value || std::is_array<T>::value>::type
 elementDetail(Format& format, const T& value)
 {
     auto nextNode = format.nextNode;
     format.indexStack.push_back(0);
-
-    using std::begin;
-    using std::end;
 
     format.nextNode = format.getChild(nextNode);
 
@@ -1107,7 +1340,7 @@ elementDetail(Format& format, const T& value)
 }
 
 template <typename T>
-typename std::enable_if<!std::is_class<T>::value && !std::is_array<T>::value>::type
+typename std::enable_if<!hasBegin<T>::value && !std::is_array<T>::value>::type
 elementDetail(Format& format, const T& value)
 {
     format.error("Invalid argument for element format");
@@ -1458,6 +1691,18 @@ class CFormat
 inline std::ostream& operator<<(std::ostream& out, const fmt& f)
 {
     return f(out);
+}
+
+template <typename T>
+void SingleFormat::asprintf(std::string& dest, const T& t)
+{
+    tsioImplementation::Format format("");
+
+    format.nextNode = format.getNode();
+    format.nextNode->state = state;
+
+    printfDetail(format, t);
+    dest.append(format.dest.data(), format.dest.size());
 }
 
 template <typename... Arguments>
