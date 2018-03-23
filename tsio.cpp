@@ -552,11 +552,12 @@ void tsioImplementation::FormatState::parse(const char*& f)
     }
 }
 
-const char* tsioImplementation::FormatState::unParseForFloat(bool longDouble) const
+const char* tsioImplementation::FormatState::unParseForFloat(char* buf, bool longDouble) const
 {
     // the string is built back to front.
-    buf[30] = 0;
     char* pt = buf + 30;
+
+    *pt = 0;
 
     *(--pt) = (formatSpecifier == 's') ? 'g' : formatSpecifier;
 
@@ -1163,7 +1164,8 @@ void tsioImplementation::printfDetail(Format& format, double value)
         case 'F':
         case 'g':
         case 'G': {
-            const char* f = state.unParseForFloat(false);
+            char buf[32];
+            const char* f = state.unParseForFloat(buf, false);
             Buffer tmp;
             char* pt = tmp.data();
             size_t capacity = tmp.capacity();
@@ -1232,7 +1234,8 @@ void tsioImplementation::printfDetail(Format& format, long double value)
         case 'F':
         case 'g':
         case 'G': {
-            const char* f = state.unParseForFloat(true);
+            char buf[32];
+            const char* f = state.unParseForFloat(buf, true);
             Buffer tmp;
             char* pt = tmp.data();
             size_t capacity = tmp.capacity();

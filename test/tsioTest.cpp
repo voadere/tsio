@@ -678,12 +678,12 @@ class CFormatter
         const Custom& cRef;
 };
 
-CFormatter getFormatter(const Custom& custom)
+static CFormatter getFormatter(const Custom& custom)
 {
     return CFormatter(custom);
 }
 
-void testCustomized()
+static void testCustomized()
 {
     std::string text;
     Custom custom;

@@ -257,7 +257,7 @@ struct FormatState
 
     void parse(const char*& format);
 
-    const char* unParseForFloat(bool longDouble) const;
+    const char* unParseForFloat(char* buf, bool longDouble) const;
 
     bool widthGiven() const
     {
@@ -396,8 +396,6 @@ struct FormatState
     unsigned prefixSize;
     char formatSpecifier;
     char fillCharacter;
-
-    mutable char buf[32]; // enough for 5 flags, 2 ints, a dot and a specifier.
 };
 
 struct alignas(16) FormatNode
