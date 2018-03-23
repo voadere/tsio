@@ -65,12 +65,13 @@ static void dump(const char* fileName, unsigned format)
         }
 
         std::string s(buf, count);
+        size_t rStart = (count >= 8) ? 8 : count;
 
         switch (format) {
             case asciiFormat:
                 oprintf("%2{%08x  %[%#5C%]%#60T%S\n%}",
                         totalCount, s.substr(0,8), s.substr(0,8),
-                        totalCount + 8, s.substr(8, 8), s.substr(8, 8));
+                        totalCount + 8, s.substr(rStart, 8), s.substr(rStart, 8));
 
                 break;
 
@@ -80,7 +81,7 @@ static void dump(const char* fileName, unsigned format)
 
             case classicFormat:
                 oprintf("%08x %2{ %[%02x %]%}%#61T|%S|\n", totalCount,
-                        s.substr(0,8), s.substr(8, 8), s);
+                        s.substr(0,8), s.substr(rStart, 8), s);
                 break;
 
         }

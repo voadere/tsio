@@ -58,7 +58,7 @@ static void show()
 
 static void shine()
 {
-    oprintf("{\n%[   %<{ %2d: %#[%-s, %] }%>\n%]}\n", m);
+    oprintf("{\n%[   %<{ %2d: %[%-s, %#] }%>\n%]}\n", m);
 }
 
 static void  overview()
@@ -68,9 +68,9 @@ static void  overview()
               "%<"              // start element format for map element
               "{ "              // generate open brace
                 "%2d: "         // format for element key
-                "%#["           // start loop format for element value
+                "%["           // start loop format for element value
                   "%-s, "       // format for element of element and , separator
-                "%] }"          // end loop format for element value
+                "%#] }"          // end loop format for element value
               "%>\n"            // end element format for map element
             "%]}\n",            // end loop format for map
             m);                 

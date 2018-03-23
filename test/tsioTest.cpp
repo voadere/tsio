@@ -346,13 +346,13 @@ static void testNesting()
     text = fstring("%[%d%]", ia);
     expect("123456", text);
 
-    text = fstring("%#[%d, %]", ia);
+    text = fstring("%[%d, %#]", ia);
     expect("1, 2, 3, 4, 5, 6", text);
 
     text = fstring("%[%d %2{*%}, %]", ia);
     expect("1 **, 2 **, 3 **, 4 **, 5 **, 6 **, ", text);
 
-    text = fstring("%#[%d %2{*%}, %]", ia);
+    text = fstring("%[%d %2{*%}, %#]", ia);
     expect("1 **, 2 **, 3 **, 4 **, 5 **, 6", text);
 
     std::tuple<int, int, int, int, int, int> t = { 1, 2, 3, 4, 5, 6 };
@@ -360,13 +360,13 @@ static void testNesting()
     text = fstring("%[%d%]", t);
     expect("123456", text);
 
-    text = fstring("%#[%d, %]", t);
+    text = fstring("%[%d, %#]", t);
     expect("1, 2, 3, 4, 5, 6", text);
 
     text = fstring("%[%d %2{*%}, %]", t);
     expect("1 **, 2 **, 3 **, 4 **, 5 **, 6 **, ", text);
 
-    text = fstring("%#[%d %2{*%}, %]", t);
+    text = fstring("%[%d %2{*%}, %#]", t);
     expect("1 **, 2 **, 3 **, 4 **, 5 **, 6", text);
 
 }
@@ -503,15 +503,15 @@ static void testExtensions()
     text = fstring("%[v=%d, %]", v1);
     expect("v=9, v=8, v=7, v=6, ", text);
 
-    text = fstring("{ %#[v=%d, %] }", v1);
+    text = fstring("{ %[v=%d, %#] }", v1);
     expect("{ v=9, v=8, v=7, v=6 }", text);
 
-    text = fstring("{ %#[v=%.2f, %] }", fa);
+    text = fstring("{ %[v=%.2f, %#] }", fa);
     expect("{ v=1.20, v=2.30, v=3.40, v=4.56 }", text);
 
     std::map<int, const char*> m = { {1, "one"}, {3, "three"}, {2, "two"} };
 
-    text = fstring("%#[%<{ key: %3d, value: %5s }%>, %]", m);
+    text = fstring("%[%<{ key: %3d, value: %5s }%>, %#]", m);
     expect("{ key:   1, value:   one }, { key:   2, value:   two }, { key:   3, value: three }", text);
 
     text = fstring("%#{ { %[%6s%] }", m);
@@ -544,7 +544,7 @@ static void testTuple()
     text = fstring("%[v=%s, %]", t);
     expect("v=1, v=2.3, v=four, ", text);
 
-    text = fstring("{ %#[v=%s, %] }", t);
+    text = fstring("{ %[v=%s, %#] }", t);
     expect("{ v=1, v=2.3, v=four }", text);
 
     text = fstring("%<%5d %5.2f %10s%>", t);
@@ -567,10 +567,10 @@ static void testTuple()
     text = fstring("%<{ %5d, %5d, %5s }%>", tv);
     expect("{     1,     1    3    5,  four }", text);
 
-    text = fstring("%<{ %5d, [%#[%5d, %]], %5s }%>", tv);
+    text = fstring("%<{ %5d, [%[%5d, %#]], %5s }%>", tv);
     expect("{     1, [    1,     3,     5],  four }", text);
 
-    text = fstring("%<{ [%2$#[%5d, %]], %3$5s,  %1$5d }%>", tv);
+    text = fstring("%<{ [%2$[%5d, %#]], %3$5s,  %1$5d }%>", tv);
     expect("{ [    1,     3,     5],  four,      1 }", text);
 
 }
@@ -715,6 +715,9 @@ static void run()
 static void test()
 {
     std::string text;
+    char a[] = { '\377', '\376' };
+
+    text = fstring("%[ %02x%]", a);
 
     std::cout << text << std::endl;
 

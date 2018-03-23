@@ -664,7 +664,7 @@ struct Format
     void handleSpecialNodes(FormatNode*& node);
     void getNextNode(bool first = false);
     FormatNode* getNextSibling(FormatNode* node, bool first = false);
-    char getNextSiblingSpec(FormatNode* node);
+    std::tuple<char, unsigned> getNextSiblingSpecAndType(FormatNode* node);
     FormatNode* getChild(FormatNode* node);
     void tabTo(unsigned column, bool absolute);
 
@@ -809,7 +809,10 @@ void customFormat(Format& format, const T& value)
 
         dest.append(text.c_str(), text.size());
 
-        auto spec = format.getNextSiblingSpec(child);
+        char spec;
+        unsigned type;
+
+        std::tie(spec, type) = format.getNextSiblingSpecAndType(child);
 
         if (spec == 0) {
             format.error(child, "Missing format");
@@ -954,11 +957,14 @@ collectionDetail(Format& format, const T& value)
 
             ++b;
 
-            auto spec = format.getNextSiblingSpec(child);
+            char spec;
+            unsigned type;
+
+            std::tie(spec, type) = format.getNextSiblingSpecAndType(child);
 
             if (spec != ']') {
                 format.error(child, "Invalid collection format (expected %])");
-            } else if (b != e || !(nextNode->state.type & alternative)) {
+            } else if (b != e || !(type & alternative)) {
                 child = format.getNextSibling(child);
                 auto& state = child->state;
 
@@ -1050,11 +1056,14 @@ tupleCollectionDetail(Format& format, const std::tuple<Tp...>& value)
         printfDetail(format, std::get<I>(value));
     }
 
-    auto spec = format.getNextSiblingSpec(child);
+    char spec;
+    unsigned type;
+
+    std::tie(spec, type) = format.getNextSiblingSpecAndType(child);
 
     if (spec != ']') {
         format.error(child, "Invalid collection format(expected %]");
-    } else if (I != sizeof...(Tp) - 1 || !(nextNode->state.type & alternative)) {
+    } else if (I != sizeof...(Tp) - 1 || !(type & alternative)) {
         child = format.getNextSibling(child);
         auto& state = child->state;
 
@@ -1099,11 +1108,14 @@ tupleCollectionDetail(size_t index, Format& format, const std::tuple<Tp...>& val
             printfDetail(format, std::get<I>(value));
         }
 
-        auto spec = format.getNextSiblingSpec(child);
+        char spec;
+        unsigned type;
+
+        std::tie(spec, type) = format.getNextSiblingSpecAndType(child);
 
         if (spec != ']') {
             format.error(child, "Invalid collection format(expected %]");
-        } else if (I != sizeof...(Tp) - 1 || !(nextNode->state.type & alternative)) {
+        } else if (I != sizeof...(Tp) - 1 || !(type & alternative)) {
             child = format.getNextSibling(child);
             auto& state = child->state;
 

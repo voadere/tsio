@@ -843,19 +843,21 @@ tsioImplementation::FormatNode* tsioImplementation::Format::getNextSibling(Forma
     return node;
 }
 
-char tsioImplementation::Format::getNextSiblingSpec(FormatNode* node)
+std::tuple<char, unsigned> tsioImplementation::Format::getNextSiblingSpecAndType(FormatNode* node)
 {
-    if (node == nullptr) {
-        return 0;
-    }
-
-    node = node->next;
-
-    while (node != nullptr && node->state.nonDynamicSpecial()) {
+    if (node != nullptr) {
         node = node->next;
+
+        while (node != nullptr && node->state.nonDynamicSpecial()) {
+            node = node->next;
+        }
     }
 
-    return (node == nullptr) ? 0 : node->state.formatSpecifier;
+    if (node == nullptr) {
+        return { '\0' , 0u };
+    } else {
+        return { node->state.formatSpecifier, node->state.type };
+    }
 }
 
 tsioImplementation::FormatNode* tsioImplementation::Format::getChild(FormatNode* node)
@@ -1214,7 +1216,7 @@ void tsioImplementation::printfDetail(Format& format, char value)
             return;
 
         default:
-            printfDetail(format, int(value));
+            printfDetail(format, value, static_cast<unsigned char>(value), true);
     }
 }
 
