@@ -923,101 +923,103 @@ collectionDetail(Format& format, const T& value)
     format.error("Invalid argument for collection format");
 }
 
+inline std::tuple<size_t, size_t> getRange(Format& format)
+{
+    auto& state = format.nextNode->state;
+    size_t startIndex = 0;
+    size_t count = ~size_t(0);
+
+    if (state.widthGiven()) {
+        startIndex = state.width;
+
+        if (!(state.type & alternative)) {
+            startIndex--;
+        }
+
+        if (state.precisionGiven()) {
+            if (state.precision != 0) {
+                count = state.precision;
+            }
+        } else {
+            count = 1;
+        }
+    } else if (state.precisionGiven()) {
+        if (state.precisionGiven()) {
+            if (state.precision != 0) {
+                count = state.precision;
+            }
+        }
+    }
+
+    return { startIndex, count };
+}
+
 template <typename T>
 typename std::enable_if<hasBegin<T>::value || std::is_array<T>::value>::type
 collectionDetail(Format& format, const T& value)
 {
     auto nextNode = format.nextNode;
     auto& dest = format.dest;
-    auto& state = format.nextNode->state;
+    size_t startIndex;
+    size_t count;
 
-    format.indexStack.push_back(0);
+    std::tie(startIndex, count) = getRange(format);
 
-    if (!state.widthGiven()) {
-        for (auto b = begin(value), e = end(value); b != e;) {
-            auto child = format.getChild(nextNode);
+    if (startIndex >= size(value)) {
+        return;
+    }
 
-            if (child == 0 || child->state.formatSpecifier == ']') {
-                format.error(child, "Missing format");
-                break;
-            }
+    format.indexStack.push_back(startIndex);
 
-            format.nextNode = child;
+    auto b = begin(value);
+
+    std::advance(b, startIndex);
+
+    for (auto e = end(value); b != e;) {
+        auto child = format.getChild(nextNode);
+
+        if (child == 0 || child->state.formatSpecifier == ']') {
+            format.error(child, "Missing format");
+            break;
+        }
+
+        format.nextNode = child;
+        auto& state = child->state;
+
+        dest.append(state.prefix, state.prefixSize);
+
+        if (state.formatSpecifier == '[') {
+            collectionDetail(format, *b);
+        } else if (state.formatSpecifier == '<') {
+            elementDetail(format, *b);
+        } else {
+            printfDetail(format, *b);
+        }
+
+        ++b;
+        --count;
+
+        char spec;
+        unsigned type;
+
+        std::tie(spec, type) = format.getNextSiblingSpecAndType(child);
+
+        if (spec != ']') {
+            format.error(child, "Invalid collection format (expected %])");
+        } else if ((b != e && count != 0) || !(type & alternative)) {
+            child = format.getNextSibling(child);
             auto& state = child->state;
 
             dest.append(state.prefix, state.prefixSize);
-
-            if (state.formatSpecifier == '[') {
-                collectionDetail(format, *b);
-            } else if (state.formatSpecifier == '<') {
-                elementDetail(format, *b);
-            } else {
-                printfDetail(format, *b);
-            }
-
-            ++b;
-
-            char spec;
-            unsigned type;
-
-            std::tie(spec, type) = format.getNextSiblingSpecAndType(child);
-
-            if (spec != ']') {
-                format.error(child, "Invalid collection format (expected %])");
-            } else if (b != e || !(type & alternative)) {
-                child = format.getNextSibling(child);
-                auto& state = child->state;
-
-                dest.append(state.prefix, state.prefixSize);
-            }
-
-            format.indexStack.back()++;
         }
-    } else {
-        size_t index = state.width - 1;
-        size_t count = size(value);
-
-        format.indexStack.back() = index;
 
         if (count == 0) {
-            format.error("value is empty, no indexing possible");
-        } else if (index >= count) {
-            format.error("Invalid index ", index, " maximum = ", count);
-        } else {
-            auto child = format.getChild(nextNode);
-
-            if (child == 0 || child->state.formatSpecifier == ']') {
-                format.error(child, "Missing format");
-            } else {
-                format.nextNode = child;
-                auto& state = child->state;
-
-                dest.append(state.prefix, state.prefixSize);
-
-                auto it = begin(value);
-
-                std::advance(it, index);
-
-                if (state.formatSpecifier == '[') {
-                    collectionDetail(format, *it);
-                } else if (state.formatSpecifier == '<') {
-                    elementDetail(format, *it);
-                } else {
-                    printfDetail(format, *it);
-                }
-
-                child = format.getNextSibling(child);
-
-                if (child == nullptr || child->state.formatSpecifier != ']') {
-                    format.error(child, "Invalid collection format (expected %])");
-                } else {
-                    auto& state = child->state;
-
-                    dest.append(state.prefix, state.prefixSize);
-                }
-            }
+            break;
         }
+
+        format.indexStack.back()++;
     }
+
 
     format.indexStack.pop_back();
     format.nextNode = nextNode;
@@ -1025,65 +1027,13 @@ collectionDetail(Format& format, const T& value)
 
 template<std::size_t I = 0, typename... Tp>
 typename std::enable_if<I == sizeof...(Tp), void>::type
-tupleCollectionDetail(Format& format, const std::tuple<Tp...>& value)
+tupleCollectionDetail(Format& format, const std::tuple<Tp...>& value, size_t index, size_t count)
 {
 }
 
 template<std::size_t I = 0, typename... Tp>
 typename std::enable_if<I < sizeof...(Tp), void>::type
-tupleCollectionDetail(Format& format, const std::tuple<Tp...>& value)
-{
-    auto nextNode = format.nextNode;
-    auto& dest = format.dest;
-
-    auto child = format.getChild(nextNode);
-
-    if (child == nullptr) {
-        format.error(child, "Missing format");
-        return;
-    }
-
-    format.nextNode = child;
-    auto& state = child->state;
-
-    dest.append(state.prefix, state.prefixSize);
-
-    if (state.formatSpecifier == '[') {
-        collectionDetail(format, std::get<I>(value));
-    } else if (state.formatSpecifier == '<') {
-        elementDetail(format, std::get<I>(value));
-    } else {
-        printfDetail(format, std::get<I>(value));
-    }
-
-    char spec;
-    unsigned type;
-
-    std::tie(spec, type) = format.getNextSiblingSpecAndType(child);
-
-    if (spec != ']') {
-        format.error(child, "Invalid collection format(expected %]");
-    } else if (I != sizeof...(Tp) - 1 || !(type & alternative)) {
-        child = format.getNextSibling(child);
-        auto& state = child->state;
-
-        dest.append(state.prefix, state.prefixSize);
-    }
-
-    format.nextNode = nextNode;
-    format.indexStack.back()++;
-    tupleCollectionDetail<I + 1, Tp...>(format, value);
-}
-
-template<std::size_t I = 0, typename... Tp>
-typename std::enable_if<I == sizeof...(Tp), void>::type
-tupleCollectionDetail(size_t index, Format& format, const std::tuple<Tp...>& value)
-{
-}
-
-template<std::size_t I = 0, typename... Tp>
-typename std::enable_if<I < sizeof...(Tp), void>::type
-tupleCollectionDetail(size_t index, Format& format, const std::tuple<Tp...>& value)
+tupleCollectionDetail(Format& format, const std::tuple<Tp...>& value, size_t index, size_t count)
 {
     if (index == I) {
         auto nextNode = format.nextNode;
@@ -1123,36 +1073,31 @@ tupleCollectionDetail(size_t index, Format& format, const std::tuple<Tp...>& val
         }
 
         format.nextNode = nextNode;
-        return;
+        if (--count == 0) {
+            return;
+        }
+
+        index++;
     }
 
-    tupleCollectionDetail<I + 1, Tp...>(index, format, value);
+    format.indexStack.back()++;
+    tupleCollectionDetail<I + 1, Tp...>(format, value, index, count);
 }
 
 template <typename... Ts>
 void collectionDetail(Format& format, const std::tuple<Ts...>& value)
 {
-    auto& state= format.nextNode->state;
+    size_t startIndex;
+    size_t count;
 
-    format.indexStack.push_back(0);
+    std::tie(startIndex, count) = getRange(format);
 
-    if (!state.widthGiven()) {
-        tupleCollectionDetail(format, value);
-    } else {
-        size_t index = state.width - 1;
-        size_t count = sizeof...(Ts);
-
-        format.indexStack.back() = index;
-
-        if (count == 0) {
-            format.error("value is empty, no indexing possible");
-        } else if (index >= count) {
-            format.error("Invalid index ", index, " maximum = ", count);
-        } else {
-            tupleCollectionDetail(index, format, value);
-        }
+    if (startIndex >= sizeof...(Ts)) {
+        return;
     }
 
+    format.indexStack.push_back(0);
+    tupleCollectionDetail(format, value, startIndex, count);
     format.indexStack.pop_back();
 }
 

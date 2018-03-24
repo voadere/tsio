@@ -425,6 +425,8 @@ static void testExtensions()
     text = fstring("%S", "12\a\b\f34");
     expect("12...34", text);
 
+    text = fstring("%*4${!%}", 1, 22, 333, 2);
+    expect("!!", text);
 
     text = fstring("%#S", "12\a\b\f34");
     expect("12\\a\\b\\f34", text);
@@ -466,59 +468,6 @@ static void testExtensions()
 
     text = fstring("%\"*20s", "abc");
     expect("*****************abc", text);
-
-    std::vector<int> v = {10, 200, 3000};
-
-    text = fstring("vector { %10d }", v);
-    expect("vector {         10       200      3000 }", text);
-
-    std::array<double, 3> a = {10.11, 200.222, 3000.3333};
-
-    text = fstring("array { %10.3f }", a);
-    expect("array {     10.110   200.222  3000.333 }", text);
-
-    std::set<int> s = {1, 100, 1000, 2, 3};
-
-    text = fstring("set {%5d }", s);
-    expect("set {    1    2    3  100 1000 }", text);
-
-    text = fstring("%*4${!%}", 1, 22, 333, 2);
-    expect("!!", text);
-
-    text = fstring("%2[ %d %]", v);
-    expect(" 200 ", text);
-
-    text = fstring("%1[ %#N: %d %]", v);
-    expect(" 0: 10 ", text);
-
-    text = fstring("%<%3d%5d%10d%>", v);
-    expect(" 10  200      3000", text);
-
-    text = fstring("%<%2$5d %3$5d %1$5d%>", v);
-    expect("  200  3000    10", text);
-
-    std::vector<int> v1 = {9, 8, 7, 6};
-    double fa[] = {1.2, 2.3, 3.4, 4.55555};
-
-    text = fstring("%[v=%d, %]", v1);
-    expect("v=9, v=8, v=7, v=6, ", text);
-
-    text = fstring("{ %[v=%d, %#] }", v1);
-    expect("{ v=9, v=8, v=7, v=6 }", text);
-
-    text = fstring("{ %[v=%.2f, %#] }", fa);
-    expect("{ v=1.20, v=2.30, v=3.40, v=4.56 }", text);
-
-    std::map<int, const char*> m = { {1, "one"}, {3, "three"}, {2, "two"} };
-
-    text = fstring("%[%<{ key: %3d, value: %5s }%>, %#]", m);
-    expect("{ key:   1, value:   one }, { key:   2, value:   two }, { key:   3, value: three }", text);
-
-    text = fstring("%#{ { %[%6s%] }", m);
-    expect(" {      1   one     2   two     3 three }", text);
-
-    text = fstring("%5s", std::make_pair(2, 4));
-    expect("    2    4", text);
 
     text = fstring("%d%#10T%d%#30T%d%#15T%d", 1, 2222, 3, 4);
     expect("1        2222                3\n              4", text);
@@ -572,6 +521,93 @@ static void testTuple()
 
     text = fstring("%<{ [%2$[%5d, %#]], %3$5s,  %1$5d }%>", tv);
     expect("{ [    1,     3,     5],  four,      1 }", text);
+
+}
+
+template <typename T>
+static void testRange(const T& r)
+{
+    std::string text;
+
+    text = fstring(" { %10s }", r);
+    expect(" {         10       200      3000      4444 }", text);
+
+    text = fstring("%2[ %s%]", r);
+    expect(" 200", text);
+
+    text = fstring("%.2[ %s%]", r);
+    expect(" 10 200", text);
+
+    text = fstring("%.[ %s%]", r);
+    expect(" 10 200 3000 4444", text);
+
+    text = fstring("%2.2[ %s%]", r);
+    expect(" 200 3000", text);
+
+    text = fstring("%2.[ %s%]", r);
+    expect(" 200 3000 4444", text);
+
+    text = fstring("%1[ %#N: %s %]", r);
+    expect(" 0: 10 ", text);
+
+    text = fstring("%#1[ %#N: %s %]", r);
+    expect(" 1: 200 ", text);
+
+    text = fstring("%1[ %N: %s %]", r);
+    expect(" 1: 10 ", text);
+
+    text = fstring("%#1[ %N: %s %]", r);
+    expect(" 2: 200 ", text);
+
+    text = fstring("%<%3s%5s%10s%10s%>", r);
+    expect(" 10  200      3000      4444", text);
+
+    text = fstring("%<%2$5s %3$5s %1$5s%>", r);
+    expect("  200  3000    10", text);
+
+}
+
+static void testRanges()
+{
+    std::string text;
+    std::vector<int> v = {10, 200, 3000, 4444};
+
+    testRange(v);
+    testRange(std::make_tuple(10, "200", 3000, 4444));
+
+    std::vector<int> v1 = {9, 8, 7, 6};
+
+    text = fstring("%[v=%d, %]", v1);
+    expect("v=9, v=8, v=7, v=6, ", text);
+
+    text = fstring("{ %[v=%d, %#] }", v1);
+    expect("{ v=9, v=8, v=7, v=6 }", text);
+
+    double fa[] = {1.2, 2.3, 3.4, 4.55555};
+
+    text = fstring("{ %[v=%.2f, %#] }", fa);
+    expect("{ v=1.20, v=2.30, v=3.40, v=4.56 }", text);
+
+    std::map<int, const char*> m = { {1, "one"}, {3, "three"}, {2, "two"} };
+
+    text = fstring("%[%<{ key: %3d, value: %5s }%>, %#]", m);
+    expect("{ key:   1, value:   one }, { key:   2, value:   two }, { key:   3, value: three }", text);
+
+    text = fstring("%#{ { %[%6s%] }", m);
+    expect(" {      1   one     2   two     3 three }", text);
+
+    text = fstring("%5s", std::make_pair(2, 4));
+    expect("    2    4", text);
+
+    std::array<double, 3> a = {10.11, 200.222, 3000.3333};
+
+    text = fstring("array { %10.3f }", a);
+    expect("array {     10.110   200.222  3000.333 }", text);
+
+    std::set<int> s = {1, 100, 1000, 2, 3};
+
+    text = fstring("set {%5d }", s);
+    expect("set {    1    2    3  100 1000 }", text);
 
 }
 
@@ -705,6 +741,7 @@ static void run()
     testPositional();
     testTuple();
     testCFormat();
+    testRanges();
     testIndex();
     testS();
     testExtensions();
@@ -715,9 +752,6 @@ static void run()
 static void test()
 {
     std::string text;
-    char a[] = { '\377', '\376' };
-
-    text = fstring("%[ %02x%]", a);
 
     std::cout << text << std::endl;
 

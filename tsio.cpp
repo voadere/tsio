@@ -116,7 +116,7 @@ static void makeNice(tsioImplementation::Buffer& dest, const char* text, int siz
     }
 }
 
-void outputString(tsioImplementation::Format& format, const char* text, int size, int maxSize)
+static void outputString(tsioImplementation::Format& format, const char* text, int size, int maxSize)
 {
     using namespace tsioImplementation;
     auto& dest = format.dest;
