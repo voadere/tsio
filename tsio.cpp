@@ -774,7 +774,7 @@ void tsioImplementation::Format::handleSpecialNodes(FormatNode*& node)
         node = node->next;
     } else if (spec == 'N') {
         if (indexStack.empty()) {
-            error("%N format is only valid inside rpeatimg, collection and element formats");
+            error("%N format is only valid inside rpeatimg, range and element formats");
         } else {
             auto index = indexStack.back();
 

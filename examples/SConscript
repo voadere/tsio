@@ -1,6 +1,6 @@
 Import(['compiler'])
 
-examples = ['asciiDump', 'customerReport', 'mapDump']
+examples = ['asciiDump', 'customerReport', 'mapDump', 'showTime']
 
 for name in examples:
     compiler.Program(name , [name +'.cpp'],

@@ -541,6 +541,12 @@ static void testRange(const T& r)
     text = fstring("%.[ %s%]", r);
     expect(" 10 200 3000 4444", text);
 
+    text = fstring("%#.2[ %s%]", r);
+    expect(" 10 200", text);
+
+    text = fstring("%#.[ %s%]", r);
+    expect(" 10 200 3000 4444", text);
+
     text = fstring("%2.2[ %s%]", r);
     expect(" 200 3000", text);
 
@@ -673,6 +679,22 @@ static void testS()
 
 class Custom
 {
+    public:
+        int getValue(char c) const
+        {
+            switch (c) {
+                case 'a':
+                    return 1;
+
+                case 'b':
+                    return 22;
+
+                case 'c':
+                    return 333;
+            }
+
+            return 9999;
+        }
 };
 
 class CFormatter
@@ -684,24 +706,9 @@ class CFormatter
         }
 
 
-    template <typename T>
-        std::tuple<bool, std::string> format(SingleFormat fmt, const T& t)
+        std::tuple<bool, std::string> format(SingleFormat fmt)
         {
-            int i = 0;
-            switch(fmt.getSpecifier()) {
-                case 'a':
-                    i = 1;
-                    break;
-
-                case 'b':
-                    i = 22;
-                    break;
-
-                case 'c':
-                    i = 333;
-                    break;
-
-            }
+            int i = cRef.getValue(fmt.getSpecifier());
 
             std::string result;
             fmt.setSpecifier('d');
@@ -725,7 +732,7 @@ static void testCustomized()
     Custom custom;
 
     text = fstring("%(%5b%5a%5c%)", custom);
-    expect("", text);
+    expect("   22    1  333", text);
 }
 
 static void run()

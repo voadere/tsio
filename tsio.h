@@ -460,11 +460,6 @@ class SingleFormat
             return state.type & tsioImplementation::leftJustify;
         }
 
-        bool widthGiven() const
-        {
-            return state.widthGiven();
-        }
-
         bool getCenterJustify() const
         {
             return state.type & tsioImplementation::centerJustify;
@@ -473,6 +468,11 @@ class SingleFormat
         bool getAlternative() const
         {
             return state.type & tsioImplementation::alternative;
+        }
+
+        bool widthGiven() const
+        {
+            return state.widthGiven();
         }
 
         bool precisionGiven() const
@@ -495,7 +495,7 @@ class SingleFormat
             return state.formatSpecifier;
         }
 
-        char getFillCharacrer() const
+        char getFillCharacter() const
         {
             return state.fillCharacter;
         }
@@ -530,6 +530,15 @@ class SingleFormat
         void setFillCharacter(char v)
         {
             state.fillCharacter = v;
+        }
+
+        void setAlternative(bool v)
+        {
+            if (v) {
+                state.type |= tsioImplementation::alternative;
+            } else {
+                state.type &= ~tsioImplementation::alternative;
+            }
         }
 
         template <typename T>
@@ -801,7 +810,7 @@ void customFormat(Format& format, const T& value)
             break;
         }
 
-        std::tie(ok, text) = formatter.format(tsio::SingleFormat(child), value);
+        std::tie(ok, text) = formatter.format(tsio::SingleFormat(child));
         if (!ok) {
             format.error(text);
             break;
@@ -864,7 +873,7 @@ printfNth(Format& format, size_t index, const std::tuple<Tp...>& value)
         auto& state = format.nextNode->state;
 
         if (state.formatSpecifier == '[') {
-            collectionDetail(format, std::get<I>(value));
+            rangeDetail(format, std::get<I>(value));
         } else if (state.formatSpecifier == '<') {
             elementDetail(format, std::get<I>(value));
         } else {
@@ -918,9 +927,9 @@ toSpec(Format& format, const T& value)
 
 template <typename T>
 typename std::enable_if<!hasBegin<T>::value && !std::is_array<T>::value>::type
-collectionDetail(Format& format, const T& value)
+rangeDetail(Format& format, const T& value)
 {
-    format.error("Invalid argument for collection format");
+    format.error("Invalid argument for range format");
 }
 
 inline std::tuple<size_t, size_t> getRange(Format& format)
@@ -956,7 +965,7 @@ inline std::tuple<size_t, size_t> getRange(Format& format)
 
 template <typename T>
 typename std::enable_if<hasBegin<T>::value || std::is_array<T>::value>::type
-collectionDetail(Format& format, const T& value)
+rangeDetail(Format& format, const T& value)
 {
     auto nextNode = format.nextNode;
     auto& dest = format.dest;
@@ -989,7 +998,7 @@ collectionDetail(Format& format, const T& value)
         dest.append(state.prefix, state.prefixSize);
 
         if (state.formatSpecifier == '[') {
-            collectionDetail(format, *b);
+            rangeDetail(format, *b);
         } else if (state.formatSpecifier == '<') {
             elementDetail(format, *b);
         } else {
@@ -1005,7 +1014,7 @@ collectionDetail(Format& format, const T& value)
         std::tie(spec, type) = format.getNextSiblingSpecAndType(child);
 
         if (spec != ']') {
-            format.error(child, "Invalid collection format (expected %])");
+            format.error(child, "Invalid range format (expected %])");
         } else if ((b != e && count != 0) || !(type & alternative)) {
             child = format.getNextSibling(child);
             auto& state = child->state;
@@ -1027,13 +1036,13 @@ collectionDetail(Format& format, const T& value)
 
 template<std::size_t I = 0, typename... Tp>
 typename std::enable_if<I == sizeof...(Tp), void>::type
-tupleCollectionDetail(Format& format, const std::tuple<Tp...>& value, size_t index, size_t count)
+tupleRangeDetail(Format& format, const std::tuple<Tp...>& value, size_t index, size_t count)
 {
 }
 
 template<std::size_t I = 0, typename... Tp>
 typename std::enable_if<I < sizeof...(Tp), void>::type
-tupleCollectionDetail(Format& format, const std::tuple<Tp...>& value, size_t index, size_t count)
+tupleRangeDetail(Format& format, const std::tuple<Tp...>& value, size_t index, size_t count)
 {
     if (index == I) {
         auto nextNode = format.nextNode;
@@ -1051,7 +1060,7 @@ tupleCollectionDetail(Format& format, const std::tuple<Tp...>& value, size_t ind
         dest.append(state.prefix, state.prefixSize);
 
         if (state.formatSpecifier == '[') {
-            collectionDetail(format, std::get<I>(value));
+            rangeDetail(format, std::get<I>(value));
         } else if (state.formatSpecifier == '<') {
             elementDetail(format, std::get<I>(value));
         } else {
@@ -1064,7 +1073,7 @@ tupleCollectionDetail(Format& format, const std::tuple<Tp...>& value, size_t ind
         std::tie(spec, type) = format.getNextSiblingSpecAndType(child);
 
         if (spec != ']') {
-            format.error(child, "Invalid collection format(expected %]");
+            format.error(child, "Invalid range format(expected %]");
         } else if (I != sizeof...(Tp) - 1 || !(type & alternative)) {
             child = format.getNextSibling(child);
             auto& state = child->state;
@@ -1081,11 +1090,11 @@ tupleCollectionDetail(Format& format, const std::tuple<Tp...>& value, size_t ind
     }
 
     format.indexStack.back()++;
-    tupleCollectionDetail<I + 1, Tp...>(format, value, index, count);
+    tupleRangeDetail<I + 1, Tp...>(format, value, index, count);
 }
 
 template <typename... Ts>
-void collectionDetail(Format& format, const std::tuple<Ts...>& value)
+void rangeDetail(Format& format, const std::tuple<Ts...>& value)
 {
     size_t startIndex;
     size_t count;
@@ -1097,14 +1106,14 @@ void collectionDetail(Format& format, const std::tuple<Ts...>& value)
     }
 
     format.indexStack.push_back(0);
-    tupleCollectionDetail(format, value, startIndex, count);
+    tupleRangeDetail(format, value, startIndex, count);
     format.indexStack.pop_back();
 }
 
 template <typename T1, typename T2>
-void collectionDetail(Format& format, const std::pair<T1, T2>& value)
+void rangeDetail(Format& format, const std::pair<T1, T2>& value)
 {
-    collectionDetail(format, std::tuple<T1, T2>(value));
+    rangeDetail(format, std::tuple<T1, T2>(value));
 }
 
 template<std::size_t I = 0, typename... Tp>
@@ -1133,7 +1142,7 @@ tupleElementDetail(Format& format, const std::tuple<Tp...>& value)
     if (state.formatSpecifier == '>') {
         format.error("Only ", I, " formats for tuple elements, ", sizeof...(Tp), " required");
     } else if (state.formatSpecifier == '[') {
-        collectionDetail(format, std::get<I>(value));
+        rangeDetail(format, std::get<I>(value));
     } else if (state.formatSpecifier == '<') {
         elementDetail(format, std::get<I>(value));
     } else {
@@ -1239,7 +1248,7 @@ elementDetail(Format& format, const T& value)
                 std::advance(it, state.position - 1);
 
                 if (state.formatSpecifier == '[') {
-                    collectionDetail(format, *it);
+                    rangeDetail(format, *it);
                 } else if (state.formatSpecifier == '<') {
                     elementDetail(format, *it);
                 } else {
@@ -1268,7 +1277,7 @@ elementDetail(Format& format, const T& value)
             }
 
             if (state.formatSpecifier == '[') {
-                collectionDetail(format, v);
+                rangeDetail(format, v);
             } else if (state.formatSpecifier == '<') {
                 elementDetail(format, v);
             } else {
@@ -1357,7 +1366,7 @@ void printfOne(Format& format, const T& value)
     format.dest.append(state.prefix, state.prefixSize);
 
     if (state.formatSpecifier == '[') {
-        collectionDetail(format, value);
+        rangeDetail(format, value);
     } else if (state.formatSpecifier == '<') {
         elementDetail(format, value);
     } else {
@@ -1381,7 +1390,7 @@ void printfNth(Format& format, size_t index, const T& value, const Ts&... ts)
         auto& state = format.nextNode->state;
 
         if (state.formatSpecifier == '[') {
-            collectionDetail(format, value);
+            rangeDetail(format, value);
         } else if (state.formatSpecifier == '<') {
             elementDetail(format, value);
         } else {
@@ -1416,7 +1425,7 @@ bool printfDispatch(Format& format, size_t index, const T& value, const Ts&... t
         auto& state = format.nextNode->state;
 
         if (state.formatSpecifier == '[') {
-            collectionDetail(format, value);
+            rangeDetail(format, value);
         } else if (state.formatSpecifier == '<') {
             elementDetail(format, value);
         } else {
